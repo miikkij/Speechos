@@ -101,6 +101,11 @@ class ModelManager:
         raise ValueError(f"Unknown STT engine: {cfg.engine}")
 
     def _load_tts(self, cfg: ModelConfig) -> Any:
+        # Docker-backed engines don't need native loading
+        from src.docker_tts import is_docker_engine
+        if is_docker_engine(cfg.engine):
+            return {"type": "docker", "engine": cfg.engine}
+
         if cfg.engine == "piper":
             from piper import PiperVoice
             model_path = self.model_dir / "piper" / f"{cfg.model}.onnx"

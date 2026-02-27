@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from src.docker_tts import docker_synthesize, is_docker_engine
 from src.server import get_config, get_models
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,26 @@ async def synthesize(req: SynthesizeRequest):
     audio_int16 = None
     sample_rate = 22050
 
+    # ── Docker-backed engines (proxy to WSL2 container) ──
+    if is_docker_engine(engine):
+        try:
+            wav_bytes = await docker_synthesize(engine, req.text, req.voice)
+        except Exception as e:
+            logger.error("Docker TTS (%s) failed: %s", engine, e)
+            raise HTTPException(500, f"Docker TTS engine '{engine}' failed: {e}")
+
+        elapsed = time.perf_counter() - t0
+        logger.info("TTS (%s/docker) completed in %.2fs for %d chars", engine, elapsed, len(req.text))
+        return StreamingResponse(
+            io.BytesIO(wav_bytes),
+            media_type="audio/wav",
+            headers={
+                "X-Processing-Time": str(round(elapsed, 3)),
+                "Content-Disposition": "inline; filename=speech.wav",
+            },
+        )
+
+    # ── Native engines (run in-process) ──────────────────
     if engine == "piper":
         audio_chunks = []
         for chunk in tts.synthesize(req.text):
