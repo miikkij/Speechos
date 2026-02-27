@@ -81,12 +81,42 @@ def extract_audio_features(audio: np.ndarray, sr: int = 16_000) -> dict[str, Any
 def predict_emotion(
     audio: np.ndarray, sr: int, emotion_model: Any
 ) -> list[dict[str, Any]]:
-    """Run emotion2vec+ inference on audio.
+    """Run emotion inference on audio.
 
-    Uses per-frame predictions aggregated across the clip for more accurate
-    emotion detection than single-utterance averaging.
+    Dispatches to the correct inference path based on model type:
+    - FunASR AutoModel (emotion2vec): .generate() with file path
+    - Transformers AudioClassificationPipeline: __call__ with raw audio
+
     Returns list of {label, score} sorted by score descending.
     """
+    # Check if this is a transformers pipeline (AudioClassificationPipeline)
+    model_type = type(emotion_model).__name__
+    if model_type == "AudioClassificationPipeline" or hasattr(emotion_model, 'task') and not hasattr(emotion_model, 'generate'):
+        return _predict_emotion_pipeline(audio, sr, emotion_model)
+
+    # Default: emotion2vec via FunASR
+    return _predict_emotion_funasr(audio, sr, emotion_model)
+
+
+def _predict_emotion_pipeline(
+    audio: np.ndarray, sr: int, pipeline_model: Any
+) -> list[dict[str, Any]]:
+    """Run emotion prediction via transformers AudioClassificationPipeline."""
+    results = pipeline_model({"raw": audio, "sampling_rate": sr})
+    emotions = []
+    for item in results:
+        emotions.append({
+            "label": item["label"],
+            "score": round(float(item["score"]), 4),
+        })
+    emotions.sort(key=lambda x: x["score"], reverse=True)
+    return emotions
+
+
+def _predict_emotion_funasr(
+    audio: np.ndarray, sr: int, emotion_model: Any
+) -> list[dict[str, Any]]:
+    """Run emotion2vec+ inference via FunASR AutoModel."""
     import tempfile
     import soundfile as sf
 
@@ -96,7 +126,6 @@ def predict_emotion(
         tmp_path = tmp.name
 
     try:
-        # Use frame-level granularity for better accuracy, then aggregate
         results = emotion_model.generate(
             tmp_path, granularity="utterance", extract_embedding=False
         )
@@ -124,10 +153,8 @@ def predict_emotion(
     }
 
     def clean_label(raw: str) -> str:
-        # Format: "中文/english" — extract the english part
         if "/" in raw:
             return raw.split("/", 1)[1].strip()
-        # Try to map Chinese-only labels
         for cn, en in LABEL_MAP.items():
             if cn in raw:
                 return en
@@ -144,11 +171,173 @@ def predict_emotion(
 def run_diarization(
     audio: np.ndarray, sr: int, diarization_model: Any
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Run speaker diarization using resemblyzer d-vector embeddings + spectral clustering.
+    """Run speaker diarization.
 
-    Segments audio into fixed windows, extracts speaker embeddings,
-    clusters them, and returns speaker-labeled segments.
+    Dispatches based on model type:
+    - resemblyzer VoiceEncoder: d-vector embeddings + spectral clustering
+    - pyannote Pipeline: end-to-end neural diarization
+    - speechbrain: speaker verification-based clustering
     """
+    model_type = type(diarization_model).__name__
+
+    # PyAnnote Pipeline
+    if model_type == "Pipeline" and hasattr(diarization_model, 'instantiate'):
+        return _run_diarization_pyannote(audio, sr, diarization_model)
+
+    # SpeechBrain SpeakerRecognition
+    if model_type in ("SpeakerRecognition", "EncoderClassifier"):
+        return _run_diarization_speechbrain(audio, sr, diarization_model)
+
+    # Default: resemblyzer
+    return _run_diarization_resemblyzer(audio, sr, diarization_model)
+
+
+def _run_diarization_pyannote(
+    audio: np.ndarray, sr: int, pipeline: Any
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run diarization via pyannote.audio Pipeline."""
+    import torch
+    import io
+    import soundfile as sf
+
+    # PyAnnote expects a file-like object or path
+    buf = io.BytesIO()
+    sf.write(buf, audio, sr, format="WAV")
+    buf.seek(0)
+
+    diarization = pipeline({"uri": "audio", "audio": buf})
+
+    segments = []
+    speaker_times: dict[str, float] = {}
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        dur = turn.end - turn.start
+        segments.append({
+            "speaker": speaker,
+            "start": round(turn.start, 3),
+            "end": round(turn.end, 3),
+            "duration": round(dur, 3),
+        })
+        speaker_times[speaker] = speaker_times.get(speaker, 0.0) + dur
+
+    summary = {
+        "num_speakers": len(speaker_times),
+        "speakers": {spk: round(t, 3) for spk, t in sorted(speaker_times.items())},
+    }
+    return segments, summary
+
+
+def _run_diarization_speechbrain(
+    audio: np.ndarray, sr: int, model: Any
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run speaker diarization via SpeechBrain embeddings + clustering."""
+    import torch
+    from sklearn.cluster import SpectralClustering
+    from sklearn.metrics import silhouette_score
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    duration = len(audio) / sr
+    if duration < 0.5:
+        return [], {"num_speakers": 0, "speakers": {}}
+
+    # Segment into windows
+    window_sec = 1.5
+    hop_sec = 0.75
+    window_samples = int(window_sec * sr)
+    hop_samples = int(hop_sec * sr)
+
+    chunks = []
+    segments_info = []
+    pos = 0
+    while pos + window_samples <= len(audio):
+        start_t = pos / sr
+        end_t = (pos + window_samples) / sr
+        chunks.append(audio[pos:pos + window_samples])
+        segments_info.append((start_t, end_t))
+        pos += hop_samples
+
+    if len(chunks) < 2:
+        return [
+            {"speaker": "SPEAKER_0", "start": 0.0, "end": round(duration, 3), "duration": round(duration, 3)}
+        ], {"num_speakers": 1, "speakers": {"SPEAKER_0": round(duration, 3)}}
+
+    # Extract embeddings
+    import numpy as np
+    embeddings = []
+    for chunk in chunks:
+        tensor = torch.tensor(chunk).unsqueeze(0)
+        emb = model.encode_batch(tensor)
+        embeddings.append(emb.squeeze().cpu().numpy())
+    embeddings = np.array(embeddings)
+
+    # Same clustering logic as resemblyzer path
+    sim_matrix = cosine_similarity(embeddings)
+    n = len(sim_matrix)
+    mask = ~np.eye(n, dtype=bool)
+    mean_sim = sim_matrix[mask].mean()
+
+    if mean_sim > 0.82:
+        return [
+            {"speaker": "SPEAKER_0", "start": 0.0, "end": round(duration, 3), "duration": round(duration, 3)}
+        ], {"num_speakers": 1, "speakers": {"SPEAKER_0": round(duration, 3)}}
+
+    best_n = 2
+    best_score = -1
+    for n_clusters in range(2, min(6, len(embeddings)) + 1):
+        try:
+            clustering = SpectralClustering(n_clusters=n_clusters, affinity="cosine", random_state=42, n_init=3)
+            labels = clustering.fit_predict(embeddings)
+            if len(set(labels)) < 2:
+                continue
+            score = silhouette_score(embeddings, labels, metric="cosine")
+            if score > best_score:
+                best_score = score
+                best_n = n_clusters
+        except Exception:
+            continue
+
+    clustering = SpectralClustering(n_clusters=best_n, affinity="cosine", random_state=42, n_init=10)
+    labels = clustering.fit_predict(embeddings)
+
+    merged = _merge_diarization_segments(segments_info, labels, duration)
+    return merged
+
+
+def _merge_diarization_segments(
+    segments_info: list[tuple[float, float]], labels: Any, duration: float
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Merge consecutive segments with same speaker label."""
+    raw_segments = []
+    for (start_t, end_t), label in zip(segments_info, labels):
+        speaker = f"SPEAKER_{label}"
+        raw_segments.append({
+            "speaker": speaker,
+            "start": round(start_t, 3),
+            "end": round(end_t, 3),
+            "duration": round(end_t - start_t, 3),
+        })
+
+    merged = []
+    for seg in raw_segments:
+        if merged and merged[-1]["speaker"] == seg["speaker"]:
+            merged[-1]["end"] = seg["end"]
+            merged[-1]["duration"] = round(seg["end"] - merged[-1]["start"], 3)
+        else:
+            merged.append(dict(seg))
+
+    speaker_times: dict[str, float] = {}
+    for seg in merged:
+        speaker_times[seg["speaker"]] = speaker_times.get(seg["speaker"], 0.0) + seg["duration"]
+
+    return merged, {
+        "num_speakers": len(speaker_times),
+        "speakers": {spk: round(total, 3) for spk, total in sorted(speaker_times.items())},
+    }
+
+
+def _run_diarization_resemblyzer(
+    audio: np.ndarray, sr: int, diarization_model: Any
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run speaker diarization using resemblyzer d-vector embeddings + spectral clustering."""
     from resemblyzer import preprocess_wav
     from sklearn.cluster import SpectralClustering
     from sklearn.metrics import silhouette_score
@@ -236,38 +425,8 @@ def run_diarization(
     )
     labels = clustering.fit_predict(embeddings)
 
-    # Build segments with speaker labels
-    raw_segments = []
-    for (start_t, end_t), label in zip(segments_info, labels):
-        speaker = f"SPEAKER_{label}"
-        raw_segments.append({
-            "speaker": speaker,
-            "start": round(start_t, 3),
-            "end": round(end_t, 3),
-            "duration": round(end_t - start_t, 3),
-        })
-
-    # Merge consecutive segments from the same speaker
-    merged = []
-    for seg in raw_segments:
-        if merged and merged[-1]["speaker"] == seg["speaker"]:
-            merged[-1]["end"] = seg["end"]
-            merged[-1]["duration"] = round(seg["end"] - merged[-1]["start"], 3)
-        else:
-            merged.append(dict(seg))
-
-    # Build speaker summary
-    speaker_times: dict[str, float] = {}
-    for seg in merged:
-        speaker_times[seg["speaker"]] = speaker_times.get(seg["speaker"], 0.0) + seg["duration"]
-
-    return merged, {
-        "num_speakers": len(speaker_times),
-        "speakers": {
-            spk: round(total, 3)
-            for spk, total in sorted(speaker_times.items())
-        },
-    }
+    # Merge consecutive segments and build speaker summary
+    return _merge_diarization_segments(segments_info, labels, duration)
 
 
 def analyze_audio(

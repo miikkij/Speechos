@@ -142,6 +142,62 @@ async def system_info():
     }
 
 
+def _check_engine_installed(engine: str) -> bool:
+    """Check if the Python package for an engine is actually installed."""
+    try:
+        if engine == "faster-whisper":
+            import faster_whisper  # noqa: F401
+        elif engine == "vosk":
+            import vosk  # noqa: F401
+        elif engine == "nemo":
+            import nemo.collections.asr  # noqa: F401
+        elif engine == "whisperx":
+            import whisperx  # noqa: F401
+        elif engine == "moonshine":
+            import moonshine  # noqa: F401
+        elif engine in ("wav2vec2-stt", "wav2vec2-ser", "hubert-ser", "wavlm-ser", "wav2small"):
+            import transformers  # noqa: F401
+        elif engine == "emotion2vec":
+            import funasr  # noqa: F401
+        elif engine == "pyannote":
+            import pyannote.audio  # noqa: F401
+        elif engine == "pyannote-vad":
+            import pyannote.audio  # noqa: F401
+        elif engine == "speechbrain":
+            import speechbrain  # noqa: F401
+        elif engine == "resemblyzer":
+            from resemblyzer import VoiceEncoder  # noqa: F401
+        elif engine == "silero":
+            import torch  # noqa: F401
+        elif engine == "piper":
+            import piper  # noqa: F401
+        elif engine == "kokoro":
+            import kokoro  # noqa: F401
+        elif engine == "chatterbox":
+            import chatterbox  # noqa: F401
+        elif engine == "bark":
+            import transformers  # noqa: F401
+        elif engine == "espeak":
+            pass  # system binary, assume available
+        elif engine == "none":
+            pass
+        elif engine in ("xtts", "chattts", "melotts", "orpheus", "fish-speech", "cosyvoice", "parler", "qwen3-tts"):
+            pass  # Docker engines, always "available" as options
+        else:
+            return False
+        return True
+    except ImportError:
+        return False
+
+# Cache availability at import time so we don't re-check every request
+_engine_availability: dict[str, bool] = {}
+
+def _is_engine_installed(engine: str) -> bool:
+    if engine not in _engine_availability:
+        _engine_availability[engine] = _check_engine_installed(engine)
+    return _engine_availability[engine]
+
+
 @router.get("/system/model-options")
 async def model_options():
     """Return available model options for each category."""
@@ -157,8 +213,16 @@ async def model_options():
         else:
             current[key] = {"engine": "none", "model": "none"}
 
+    # Add installed flag to each option
+    options_with_status: dict[str, list[dict]] = {}
+    for category, opts in MODEL_OPTIONS.items():
+        options_with_status[category] = [
+            {**opt, "installed": _is_engine_installed(opt["engine"])}
+            for opt in opts
+        ]
+
     return {
-        "options": MODEL_OPTIONS,
+        "options": options_with_status,
         "current": current,
         "gpu_available": hw.gpu_available,
     }

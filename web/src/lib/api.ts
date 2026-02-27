@@ -21,6 +21,7 @@ export interface ModelOption {
     engine: string;
     model: string;
     label: string;
+    installed?: boolean;
 }
 
 export interface ModelSelection {

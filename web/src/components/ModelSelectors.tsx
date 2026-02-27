@@ -77,8 +77,12 @@ export function ModelSelectors({ disabled }: ModelSelectorsProps) {
                             }}
                         >
                             {opts.map((opt) => (
-                                <option key={`${opt.engine}|${opt.model}`} value={`${opt.engine}|${opt.model}`}>
-                                    {opt.label}
+                                <option
+                                    key={`${opt.engine}|${opt.model}`}
+                                    value={`${opt.engine}|${opt.model}`}
+                                    disabled={opt.installed === false}
+                                >
+                                    {opt.installed === false ? `⊘ ${opt.label} (not installed)` : opt.label}
                                 </option>
                             ))}
                         </select>

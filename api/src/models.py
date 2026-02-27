@@ -63,10 +63,7 @@ class ModelManager:
             from vosk import Model as VoskModel
             model_path = self.model_dir / "vosk" / cfg.model
             if not model_path.exists():
-                raise FileNotFoundError(
-                    f"Vosk model not found: {model_path}. "
-                    f"Download from https://alphacephei.com/vosk/models"
-                )
+                self._download_vosk_model(cfg.model, model_path)
             return VoskModel(str(model_path))
         if cfg.engine == "whisperx":
             try:
@@ -337,6 +334,23 @@ class ModelManager:
                 savedir=str(self.model_dir / "speechbrain" / cfg.model),
             )
         raise ValueError(f"Unknown diarization engine: {cfg.engine}")
+
+    def _download_vosk_model(self, model_name: str, dest: Path) -> None:
+        """Download a Vosk model from alphacephei.com."""
+        import io
+        import urllib.request
+        import zipfile
+
+        url = f"https://alphacephei.com/vosk/models/{model_name}.zip"
+        logger.info("Downloading Vosk model: %s", url)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(url) as resp:  # noqa: S310
+            data = resp.read()
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            zf.extractall(dest.parent)
+        if not dest.exists():
+            raise FileNotFoundError(f"Vosk model download failed — expected {dest}")
+        logger.info("Vosk model downloaded: %s", dest)
 
     def unload(self, key: str) -> None:
         if key in self._loaded:
