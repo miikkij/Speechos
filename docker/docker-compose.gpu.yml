@@ -12,14 +12,14 @@ services:
       dockerfile: docker/api.Dockerfile
     container_name: speechos-api
     ports:
-      - "8000:8000"
+      - "36300:36300"
     volumes:
       - models:/models
       - recordings:/recordings
       - ../samples:/samples:ro
     environment:
       - SPEECHOS_HOST=0.0.0.0
-      - SPEECHOS_PORT=8000
+      - SPEECHOS_PORT=36300
       - SPEECHOS_MODEL_DIR=/models
       # Auto-detect hardware, or override:
       # - SPEECHOS_TIER=gpu-32gb
@@ -42,9 +42,9 @@ services:
       dockerfile: docker/web.Dockerfile
     container_name: speechos-web
     ports:
-      - "3000:3000"
+      - "36301:36301"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://api:36300
     depends_on:
       api:
         condition: service_healthy

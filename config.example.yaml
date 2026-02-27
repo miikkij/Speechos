@@ -58,10 +58,10 @@ tier: auto
 # ── Server ────────────────────────────────────────────────
 server:
   host: 0.0.0.0
-  port: 8000
+  port: 36300
   workers: 1            # Keep at 1 for GPU (shared VRAM)
   cors_origins:
-    - "http://localhost:3000"
+    - "http://localhost:36301"
     - "http://localhost:80"
 
 # ── Storage ───────────────────────────────────────────────

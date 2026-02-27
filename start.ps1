@@ -103,9 +103,9 @@ if ($Dev) {
 
     Write-Host ""
     Write-Host "Speechos running in dev mode:" -ForegroundColor Green
-    Write-Host "  Web:  http://localhost:3000"
-    Write-Host "  API:  http://localhost:8000"
-    Write-Host "  Docs: http://localhost:8000/docs"
+    Write-Host "  Web:  http://localhost:36301"
+    Write-Host "  API:  http://localhost:36300"
+    Write-Host "  Docs: http://localhost:36300/docs"
     Write-Host ""
     Write-Host "Press Ctrl+C to stop"
 
@@ -132,9 +132,9 @@ if ($Dev) {
     Write-Host ""
     Write-Host "Speechos is running:" -ForegroundColor Green
     Write-Host "  App:  http://localhost (via nginx)"
-    Write-Host "  Web:  http://localhost:3000 (direct)"
-    Write-Host "  API:  http://localhost:8000 (direct)"
-    Write-Host "  Docs: http://localhost:8000/docs (Swagger)"
+    Write-Host "  Web:  http://localhost:36301 (direct)"
+    Write-Host "  API:  http://localhost:36300 (direct)"
+    Write-Host "  Docs: http://localhost:36300/docs (Swagger)"
     Write-Host ""
     Write-Host "Logs: docker compose -f $composeFile logs -f"
     Write-Host "Stop: docker compose -f $composeFile down"
