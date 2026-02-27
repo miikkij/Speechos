@@ -33,6 +33,64 @@ export interface SystemInfo {
     };
 }
 
+export interface EmotionScore {
+    label: string;
+    score: number;
+}
+
+export interface AudioFeatures {
+    duration: number;
+    pitch: {
+        mean_hz: number | null;
+        min_hz: number | null;
+        max_hz: number | null;
+        std_hz: number | null;
+    };
+    energy: {
+        mean_db: number;
+        max_db: number;
+        dynamic_range_db: number;
+    };
+    tempo_bpm: number;
+    spectral: {
+        centroid_mean_hz: number;
+        rolloff_mean_hz: number;
+        zero_crossing_rate: number;
+    };
+    speaking_rate: {
+        syllables_per_sec: number;
+        estimated_wpm: number;
+    };
+    mfcc_means: number[];
+}
+
+export interface DiarizationSegment {
+    speaker: string;
+    start: number;
+    end: number;
+    duration: number;
+}
+
+export interface DiarizationResult {
+    segments: DiarizationSegment[];
+    summary: {
+        num_speakers: number;
+        speakers: Record<string, number>;
+    };
+    error?: string;
+}
+
+export interface AnalysisResult {
+    features: AudioFeatures;
+    emotions: EmotionScore[];
+    primary_emotion?: string;
+    emotion_error?: string;
+    emotion_available: boolean;
+    diarization: DiarizationResult;
+    diarization_available: boolean;
+    processing_time: number;
+}
+
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     const res = await fetch(`${API_BASE}${path}`, init);
     if (!res.ok) {
@@ -88,4 +146,11 @@ export async function checkHealth(): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+export async function analyze(file: Blob): Promise<AnalysisResult> {
+    const form = new FormData();
+    form.append("file", file, "recording.wav");
+    const res = await apiFetch("/api/analyze", { method: "POST", body: form });
+    return res.json();
 }

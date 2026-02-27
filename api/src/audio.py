@@ -15,12 +15,50 @@ TARGET_SAMPLE_RATE = 16_000
 TARGET_CHANNELS = 1
 
 
+def _decode_with_av(source: bytes | str | Path) -> tuple[np.ndarray, int]:
+    """Decode audio using PyAV (handles WebM, MP4, and other container formats)."""
+    import av
+
+    if isinstance(source, (str, Path)):
+        container = av.open(str(source))
+    else:
+        container = av.open(io.BytesIO(source))
+
+    stream = container.streams.audio[0]
+    frames = []
+    for frame in container.decode(stream):
+        array = frame.to_ndarray()
+        # av returns shape (channels, samples) — average to mono
+        if array.ndim > 1:
+            array = array.mean(axis=0)
+        frames.append(array)
+    container.close()
+
+    audio = np.concatenate(frames).astype(np.float32)
+    # Normalize int-range to float32 [-1, 1] if needed
+    if audio.max() > 1.0 or audio.min() < -1.0:
+        audio = audio / 32768.0
+    return audio, stream.rate
+
+
 def read_audio(source: bytes | str | Path) -> tuple[np.ndarray, int]:
     """Read audio from bytes or file path, return (samples_float32, sample_rate)."""
+    raw = source
     if isinstance(source, (str, Path)):
-        data, sr = sf.read(str(source), dtype="float32")
-    else:
-        data, sr = sf.read(io.BytesIO(source), dtype="float32")
+        raw = Path(source).read_bytes()
+
+    # Use PyAV for WebM/Matroska (soundfile can't handle it)
+    if isinstance(raw, bytes) and len(raw) >= 4 and raw[:4] == b"\x1a\x45\xdf\xa3":
+        return _decode_with_av(source)
+
+    try:
+        if isinstance(source, (str, Path)):
+            data, sr = sf.read(str(source), dtype="float32")
+        else:
+            data, sr = sf.read(io.BytesIO(source), dtype="float32")
+    except Exception:
+        # Fallback to PyAV for any format soundfile can't handle
+        return _decode_with_av(source)
 
     # Convert stereo to mono
     if data.ndim > 1:
@@ -58,7 +96,7 @@ def float32_to_wav_bytes(audio: np.ndarray, sr: int = TARGET_SAMPLE_RATE) -> byt
 
 
 def validate_audio_file(data: bytes) -> bool:
-    """Check if bytes contain a valid audio file (WAV, FLAC, OGG, MP3)."""
+    """Check if bytes contain a valid audio file (WAV, FLAC, OGG, MP3, WebM)."""
     if len(data) < 12:
         return False
     # WAV: RIFF....WAVE
@@ -69,6 +107,9 @@ def validate_audio_file(data: bytes) -> bool:
         return True
     # OGG
     if data[:4] == b"OggS":
+        return True
+    # WebM / Matroska (EBML header)
+    if data[:4] == b"\x1a\x45\xdf\xa3":
         return True
     # MP3 (frame sync)
     if data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):

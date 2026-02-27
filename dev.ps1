@@ -13,6 +13,16 @@ param(
 
 [System.Collections.ArrayList]$script:childPids = @()
 
+function Clear-Ports {
+    foreach ($port in @(36300, 36301)) {
+        Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                Write-Host "[dev] Killing PID $($_.OwningProcess) on port $port" -ForegroundColor Yellow
+                taskkill /PID $_.OwningProcess /T /F 2>$null | Out-Null
+            }
+    }
+}
+
 function Stop-DevProcesses {
     foreach ($cpid in $script:childPids) {
         # /T = kill entire process tree, /F = force
@@ -24,8 +34,20 @@ function Stop-DevProcesses {
 }
 
 try {
+    Clear-Ports
+
+    # Load .env file if present
+    $envFile = Join-Path $PSScriptRoot ".env"
+    $envVars = ""
+    if (Test-Path $envFile) {
+        Get-Content $envFile | Where-Object { $_ -match '^\s*[A-Z_]+=.+' } | ForEach-Object {
+            $envVars += " && set $($_.Trim())"
+        }
+        Write-Host "[dev] Loaded .env" -ForegroundColor DarkGray
+    }
+
     if (-not $WebOnly) {
-        $apiProc = Start-Process cmd.exe -ArgumentList "/c cd /d `"$PSScriptRoot\api`" && uv run python -m src" `
+        $apiProc = Start-Process cmd.exe -ArgumentList "/c cd /d `"$PSScriptRoot\api`" && set HF_HUB_DISABLE_SYMLINKS_WARNING=1$envVars && uv run python -m src" `
             -NoNewWindow -PassThru
         [void]$script:childPids.Add($apiProc.Id)
         Write-Host "[dev] API starting on http://localhost:36300 (PID $($apiProc.Id))" -ForegroundColor Blue

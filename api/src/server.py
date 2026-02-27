@@ -64,10 +64,11 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────
 
-from src.routers import health, recordings, system, transcribe, synthesize  # noqa: E402
+from src.routers import health, recordings, system, transcribe, synthesize, analyze  # noqa: E402
 
 app.include_router(health.router)
 app.include_router(transcribe.router, prefix="/api")
 app.include_router(synthesize.router, prefix="/api")
+app.include_router(analyze.router, prefix="/api")
 app.include_router(recordings.router, prefix="/api")
 app.include_router(system.router, prefix="/api")

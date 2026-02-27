@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Recorder } from "@/components/Recorder";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { TranscriptionView } from "@/components/TranscriptionView";
+import { AnalysisView } from "@/components/AnalysisView";
 import { TtsPlayground } from "@/components/TtsPlayground";
 import { StatusBar } from "@/components/StatusBar";
-import { transcribe, uploadRecording, type TranscriptionResult } from "@/lib/api";
+import { transcribe, analyze, uploadRecording, type TranscriptionResult, type AnalysisResult } from "@/lib/api";
 
 type Tab = "record" | "tts";
 
@@ -14,24 +15,36 @@ export default function Home() {
     const [tab, setTab] = useState<Tab>("record");
     const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
     const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
+    const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [transcribing, setTranscribing] = useState(false);
+    const [analyzing, setAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const handleRecorded = useCallback(async (blob: Blob) => {
         setRecordingBlob(blob);
         setTranscription(null);
+        setAnalysis(null);
         setError(null);
         setTranscribing(true);
+        setAnalyzing(true);
         try {
-            const [result] = await Promise.all([
+            const [transcribeResult] = await Promise.all([
                 transcribe(blob),
-                uploadRecording(blob).catch(() => null), // save in background, don't block
+                uploadRecording(blob).catch(() => null),
             ]);
-            setTranscription(result);
+            setTranscription(transcribeResult);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Transcription failed");
         } finally {
             setTranscribing(false);
+        }
+        try {
+            const analysisResult = await analyze(blob);
+            setAnalysis(analysisResult);
+        } catch (err) {
+            // Analysis failure is non-critical — transcription still shows
+        } finally {
+            setAnalyzing(false);
         }
     }, []);
 
@@ -40,8 +53,10 @@ export default function Home() {
         if (!file) return;
         setRecordingBlob(file);
         setTranscription(null);
+        setAnalysis(null);
         setError(null);
         setTranscribing(true);
+        setAnalyzing(true);
         try {
             const result = await transcribe(file);
             setTranscription(result);
@@ -49,6 +64,14 @@ export default function Home() {
             setError(err instanceof Error ? err.message : "Transcription failed");
         } finally {
             setTranscribing(false);
+        }
+        try {
+            const analysisResult = await analyze(file);
+            setAnalysis(analysisResult);
+        } catch (err) {
+            // Analysis failure is non-critical
+        } finally {
+            setAnalyzing(false);
         }
     }, []);
 
@@ -121,6 +144,7 @@ export default function Home() {
                             )}
 
                             <TranscriptionView result={transcription} loading={transcribing} />
+                            <AnalysisView result={analysis} loading={analyzing} />
                         </>
                     )}
 

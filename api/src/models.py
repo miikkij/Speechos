@@ -94,10 +94,39 @@ class ModelManager:
         raise ValueError(f"Unknown VAD engine: {cfg.engine}")
 
     def _load_emotion(self, cfg: ModelConfig) -> Any:
-        raise NotImplementedError("Emotion model loading not yet implemented")
+        if cfg.engine == "emotion2vec":
+            from funasr import AutoModel
+            return AutoModel(
+                model=cfg.model,
+                device=cfg.device,
+            )
+        raise ValueError(f"Unknown emotion engine: {cfg.engine}")
 
     def _load_diarization(self, cfg: ModelConfig) -> Any:
-        raise NotImplementedError("Diarization model loading not yet implemented")
+        if cfg.engine == "pyannote":
+            from pyannote.audio import Pipeline
+            import os
+            import torch
+
+            hf_token = (os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN") or "").strip()
+            if not hf_token:
+                raise RuntimeError(
+                    "pyannote/speaker-diarization-3.1 is a gated model. "
+                    "1) Accept terms at https://hf.co/pyannote/speaker-diarization-3.1 "
+                    "and https://hf.co/pyannote/segmentation-3.0 "
+                    "2) Create a token at https://hf.co/settings/tokens "
+                    "3) Set HF_TOKEN=hf_... in your environment"
+                )
+
+            pipeline = Pipeline.from_pretrained(
+                cfg.model,
+                token=hf_token,
+                cache_dir=str(self.model_dir / "pyannote"),
+            )
+            if cfg.device == "cuda" and torch.cuda.is_available():
+                pipeline.to(torch.device("cuda"))
+            return pipeline
+        raise ValueError(f"Unknown diarization engine: {cfg.engine}")
 
     def unload(self, key: str) -> None:
         if key in self._loaded:
