@@ -22,7 +22,7 @@ export function TtsPlayground() {
                     setSelectedVoice(`${cur.engine}|${cur.model}`);
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     const handleVoiceChange = async (value: string) => {

@@ -19,7 +19,7 @@ export function ModelSelectors({ disabled }: ModelSelectorsProps) {
                 setOptions(data.options);
                 setCurrent(data.current);
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     const handleChange = async (category: string, value: string) => {

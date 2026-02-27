@@ -23,7 +23,7 @@ export function RecordingsLibrary({ onSelect, refreshKey }: RecordingsLibraryPro
         setLoading(true);
         getRecordings()
             .then(setRecordings)
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoading(false));
     }, []);
 
