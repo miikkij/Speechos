@@ -7,32 +7,44 @@ import { TranscriptionView } from "@/components/TranscriptionView";
 import { AnalysisView } from "@/components/AnalysisView";
 import { TtsPlayground } from "@/components/TtsPlayground";
 import { StatusBar } from "@/components/StatusBar";
-import { transcribe, analyze, uploadRecording, type TranscriptionResult, type AnalysisResult } from "@/lib/api";
+import { RecordingsLibrary } from "@/components/RecordingsLibrary";
+import { ModelSelectors } from "@/components/ModelSelectors";
+import { useAudioDevices } from "@/hooks/useAudioDevices";
+import { transcribe, analyze, uploadRecording, type TranscriptionResult, type AnalysisResult, type Recording } from "@/lib/api";
 
 type Tab = "record" | "tts";
 
 export default function Home() {
     const [tab, setTab] = useState<Tab>("record");
     const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
+    const [recordingLabel, setRecordingLabel] = useState<string>("Recording");
     const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [transcribing, setTranscribing] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [refreshRecordings, setRefreshRecordings] = useState(0);
+    const { devices, selectedId, setSelectedId } = useAudioDevices();
 
-    const handleRecorded = useCallback(async (blob: Blob) => {
+    const processAudio = useCallback(async (blob: Blob, label: string, shouldUpload: boolean) => {
         setRecordingBlob(blob);
+        setRecordingLabel(label);
         setTranscription(null);
         setAnalysis(null);
         setError(null);
         setTranscribing(true);
         setAnalyzing(true);
         try {
-            const [transcribeResult] = await Promise.all([
-                transcribe(blob),
-                uploadRecording(blob).catch(() => null),
-            ]);
-            setTranscription(transcribeResult);
+            const promises: Promise<unknown>[] = [transcribe(blob)];
+            if (shouldUpload) {
+                promises.push(
+                    uploadRecording(blob)
+                        .then(() => setRefreshRecordings((n) => n + 1))
+                        .catch(() => null)
+                );
+            }
+            const [transcribeResult] = await Promise.all(promises);
+            setTranscription(transcribeResult as TranscriptionResult);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Transcription failed");
         } finally {
@@ -41,39 +53,26 @@ export default function Home() {
         try {
             const analysisResult = await analyze(blob);
             setAnalysis(analysisResult);
-        } catch (err) {
-            // Analysis failure is non-critical — transcription still shows
-        } finally {
-            setAnalyzing(false);
-        }
-    }, []);
-
-    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setRecordingBlob(file);
-        setTranscription(null);
-        setAnalysis(null);
-        setError(null);
-        setTranscribing(true);
-        setAnalyzing(true);
-        try {
-            const result = await transcribe(file);
-            setTranscription(result);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Transcription failed");
-        } finally {
-            setTranscribing(false);
-        }
-        try {
-            const analysisResult = await analyze(file);
-            setAnalysis(analysisResult);
-        } catch (err) {
+        } catch {
             // Analysis failure is non-critical
         } finally {
             setAnalyzing(false);
         }
     }, []);
+
+    const handleRecorded = useCallback((blob: Blob) => {
+        processAudio(blob, "Recording", true);
+    }, [processAudio]);
+
+    const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        processAudio(file, file.name, true);
+    }, [processAudio]);
+
+    const handleSelectRecording = useCallback((blob: Blob, recording: Recording) => {
+        processAudio(blob, recording.id, false);
+    }, [processAudio]);
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -110,7 +109,38 @@ export default function Home() {
                 <div className="max-w-2xl mx-auto space-y-6">
                     {tab === "record" && (
                         <>
-                            <Recorder onRecorded={handleRecorded} disabled={transcribing} />
+                            {/* Model selectors */}
+                            <ModelSelectors disabled={transcribing || analyzing} />
+
+                            {/* Microphone selector */}
+                            {devices.length > 1 && (
+                                <div className="flex items-center justify-center gap-2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--muted)" }}>
+                                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                        <line x1="12" x2="12" y1="19" y2="22" />
+                                    </svg>
+                                    <select
+                                        value={selectedId}
+                                        onChange={(e) => setSelectedId(e.target.value)}
+                                        disabled={transcribing}
+                                        className="text-sm rounded-lg px-3 py-1.5 max-w-xs truncate"
+                                        style={{
+                                            background: "var(--surface-2)",
+                                            color: "var(--fg)",
+                                            border: "1px solid var(--border)",
+                                        }}
+                                    >
+                                        {devices.map((d) => (
+                                            <option key={d.deviceId} value={d.deviceId}>
+                                                {d.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <Recorder onRecorded={handleRecorded} disabled={transcribing} deviceId={selectedId} />
 
                             {/* Or upload a file */}
                             <div className="flex items-center gap-3">
@@ -135,7 +165,10 @@ export default function Home() {
                                 />
                             </label>
 
-                            {recordingBlob && <AudioPlayer src={recordingBlob} label="Recording" />}
+                            {/* Saved recordings library */}
+                            <RecordingsLibrary onSelect={handleSelectRecording} refreshKey={refreshRecordings} />
+
+                            {recordingBlob && <AudioPlayer src={recordingBlob} label={recordingLabel} />}
 
                             {error && (
                                 <p className="text-sm" style={{ color: "var(--error)" }}>

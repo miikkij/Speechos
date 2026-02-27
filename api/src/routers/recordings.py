@@ -84,3 +84,24 @@ async def delete_recording(recording_id: str):
         raise HTTPException(404, "Recording not found")
     filepath.unlink()
     return {"deleted": recording_id}
+
+
+@router.get("/recordings/{recording_id}/audio")
+async def get_recording_audio(recording_id: str):
+    """Stream a recording's audio file."""
+    from fastapi.responses import FileResponse
+
+    config = get_config()
+    safe_id = "".join(c for c in recording_id if c.isalnum() or c in ("_", "-"))
+    if safe_id != recording_id:
+        raise HTTPException(400, "Invalid recording ID")
+
+    filepath = Path(config.recordings_dir) / f"{safe_id}.wav"
+    if not filepath.exists():
+        raise HTTPException(404, "Recording not found")
+
+    return FileResponse(
+        filepath,
+        media_type="audio/wav",
+        filename=f"{safe_id}.wav",
+    )

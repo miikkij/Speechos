@@ -17,6 +17,23 @@ export interface Recording {
     created_at: string;
 }
 
+export interface ModelOption {
+    engine: string;
+    model: string;
+    label: string;
+}
+
+export interface ModelSelection {
+    engine: string;
+    model: string;
+}
+
+export interface ModelOptionsResponse {
+    options: Record<string, ModelOption[]>;
+    current: Record<string, ModelSelection>;
+    gpu_available: boolean;
+}
+
 export interface SystemInfo {
     hardware: {
         mode: string;
@@ -108,11 +125,14 @@ export async function transcribe(file: Blob, language?: string): Promise<Transcr
     return res.json();
 }
 
-export async function synthesize(text: string): Promise<Blob> {
+export async function synthesize(text: string, engine?: string, model?: string): Promise<Blob> {
+    const body: Record<string, string> = { text };
+    if (engine) body.engine = engine;
+    if (model) body.model = model;
     const res = await apiFetch("/api/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify(body),
     });
     return res.blob();
 }
@@ -134,9 +154,31 @@ export async function deleteRecording(id: string): Promise<void> {
     await apiFetch(`/api/recordings/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+export function getRecordingAudioUrl(id: string): string {
+    return `${API_BASE}/api/recordings/${encodeURIComponent(id)}/audio`;
+}
+
+export async function getRecordingBlob(id: string): Promise<Blob> {
+    const res = await apiFetch(`/api/recordings/${encodeURIComponent(id)}/audio`);
+    return res.blob();
+}
+
 export async function getSystemInfo(): Promise<SystemInfo> {
     const res = await apiFetch("/api/system/info");
     return res.json();
+}
+
+export async function getModelOptions(): Promise<ModelOptionsResponse> {
+    const res = await apiFetch("/api/system/model-options");
+    return res.json();
+}
+
+export async function switchModel(category: string, engine: string, model: string): Promise<void> {
+    await apiFetch("/api/system/switch-model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, engine, model }),
+    });
 }
 
 export async function checkHealth(): Promise<boolean> {
