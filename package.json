@@ -1,0 +1,12 @@
+{
+  "name": "speechos",
+  "private": true,
+  "scripts": {
+    "dev": "bash dev.sh",
+    "dev:win": "powershell -ExecutionPolicy Bypass -File dev.ps1",
+    "dev:api": "cd api && uv run python -m src",
+    "dev:web": "cd web && pnpm dev",
+    "install:all": "cd web && pnpm install",
+    "build": "cd web && pnpm build"
+  }
+}

@@ -1,0 +1,103 @@
+# =============================================================================
+# Node.js / pnpm
+# =============================================================================
+node_modules/
+.pnpm-store/
+.pnpm-debug.log
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Editor / IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+Desktop.ini
+
+# =============================================================================
+# Python / uv
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# uv
+.python-version
+
+# Distribution / packaging
+*.egg-info/
+*.egg
+dist/
+build/
+wheels/
+*.whl
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.pytype/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# =============================================================================
+# Project-specific
+# =============================================================================
+# Audio files (keep samples, ignore bulk recordings)
+recordings/
+*.wav
+!samples/*.wav
+
+# Model downloads
+models/
+*.bin
+*.pt
+*.onnx
+*.safetensors
+
+# Temporary files
+tmp/
+temp/
+
+# Dev artifacts
+api/tmp_options.json
+
+# Cloned engine repos (built locally via Docker)
+docker/qwen3-tts-openai/

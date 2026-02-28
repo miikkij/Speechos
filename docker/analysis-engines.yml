@@ -1,0 +1,56 @@
+# ============================================================
+# Speechos: Docker Speech Analysis Engines (GPU)
+# ============================================================
+# Run one at a time to share GPU.
+#
+# Usage:
+#   docker compose -f docker/analysis-engines.yml up -d pyannote
+#   docker compose -f docker/analysis-engines.yml stop pyannote
+# ============================================================
+
+services:
+  # ── PyAnnote Speaker Diarization (LinTO) ─────────────
+  # API: POST /diarization (multipart audio + optional speaker_count)
+  # Returns: JSON { speakers: [...], segments: [...] }
+  # Requires HF_TOKEN with gated repo access for pyannote models
+  pyannote:
+    image: lintoai/linto-diarization-pyannote:latest
+    container_name: speechos-analysis-pyannote
+    ports:
+      - "36330:80"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - analysis-pyannote-models:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── FunASR (ASR + VAD + Emotion + Diarization) ──────
+  # All-in-one: emotion2vec+, paraformer, VAD, punctuation
+  # Protocol: WebSocket on port 10095 (not REST)
+  # Emotion labels: 0=angry, 1=happy, 2=neutral, 3=sad, 4=unknown
+  funasr:
+    image: funasr/funasr:latest
+    container_name: speechos-analysis-funasr
+    ports:
+      - "36331:10095"
+    volumes:
+      - analysis-funasr-models:/workspace/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+volumes:
+  analysis-pyannote-models:
+  analysis-funasr-models:

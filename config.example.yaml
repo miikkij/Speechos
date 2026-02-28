@@ -1,0 +1,88 @@
+# Speechos Configuration
+# =====================
+# Override auto-detection with explicit settings.
+# All fields are optional: omit to use auto-detected defaults.
+
+# ── Compute Mode ──────────────────────────────────────────
+# Options: auto | cpu | gpu | hybrid
+# "auto" detects GPU and picks hybrid if both available
+compute_mode: auto
+
+# ── Hardware Tier ─────────────────────────────────────────
+# Options: auto | cpu-2gb | cpu-4gb | cpu-8gb | cpu-16gb | cpu-32gb
+#          gpu-4gb | gpu-8gb | gpu-12gb | gpu-24gb | gpu-32gb
+#          hybrid-4gb-gpu | hybrid-8gb-gpu | hybrid-12gb-gpu
+#          hybrid-24gb-gpu | hybrid-32gb-gpu
+# "auto" detects RAM/VRAM and picks the right tier
+tier: auto
+
+# ── Model Overrides ───────────────────────────────────────
+# Uncomment to override individual model selections.
+# These take precedence over tier defaults.
+
+# stt:
+#   engine: faster-whisper      # faster-whisper | vosk | whisperx
+#   model: large-v3             # tiny | base | small | medium | large-v3 | turbo
+#   device: cuda                # cuda | cpu
+#   compute_type: float16       # float16 | int8_float16 | int8
+
+# tts:
+#   engine: kokoro              # kokoro | piper | orpheus | chatterbox | bark | xtts
+#   model: kokoro-v0.19
+#   device: cuda
+
+# tts_expressive:
+#   engine: orpheus
+#   model: orpheus-3b
+#   device: cuda
+#   compute_type: float16
+
+# tts_fast:
+#   engine: piper
+#   model: en_US-lessac-medium
+#   device: cpu
+
+# emotion:
+#   engine: emotion2vec         # emotion2vec | wav2vec2 | wav2small
+#   model: emotion2vec+large    # emotion2vec+seed | emotion2vec+base | emotion2vec+large
+#   device: cuda
+
+# diarization:
+#   engine: pyannote
+#   device: cpu
+
+# vad:
+#   engine: silero
+#   device: cpu
+
+# ── Server ────────────────────────────────────────────────
+server:
+  host: 0.0.0.0
+  port: 36300
+  workers: 1            # Keep at 1 for GPU (shared VRAM)
+  cors_origins:
+    - "http://localhost:36301"
+    - "http://localhost:80"
+
+# ── Storage ───────────────────────────────────────────────
+storage:
+  model_dir: ./models         # Where to download/cache models
+  recordings_dir: ./recordings
+  samples_dir: ./samples
+  max_upload_mb: 100
+
+# ── Model Loading Strategy ────────────────────────────────
+# "eager": Load all models at startup (uses more memory, faster first request)
+# "lazy":  Load on first request (slower first request, lower memory baseline)
+model_loading: lazy
+
+# ── VRAM Management ───────────────────────────────────────
+vram:
+  # Maximum VRAM to use (in GB). "auto" uses 90% of available.
+  max_usage_gb: auto
+  # Eviction strategy when VRAM is full
+  eviction: lru              # lru | priority
+  # Keep these models always loaded (never evict)
+  pinned:
+    - stt
+    # - tts

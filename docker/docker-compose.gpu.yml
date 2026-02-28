@@ -1,0 +1,78 @@
+# ============================================================
+# Speechos: Full GPU Stack (for 4090 Ti / high-end GPU)
+# ============================================================
+# Usage: docker compose -f docker-compose.gpu.yml up
+# ============================================================
+
+services:
+  # ── API Server (GPU-accelerated) ──────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    container_name: speechos-api
+    ports:
+      - "36300:36300"
+    volumes:
+      - models:/models
+      - recordings:/recordings
+      - ../samples:/samples:ro
+    environment:
+      - SPEECHOS_HOST=0.0.0.0
+      - SPEECHOS_PORT=36300
+      - SPEECHOS_MODEL_DIR=/models
+      # Auto-detect hardware, or override:
+      # - SPEECHOS_TIER=gpu-32gb
+      # - SPEECHOS_COMPUTE_MODE=hybrid
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - speechos
+
+  # ── Web Frontend ──────────────────────────────────────
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+    container_name: speechos-web
+    ports:
+      - "36301:36301"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:36300
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - speechos
+
+  # ── Reverse Proxy (optional, serves both on :80) ──────
+  nginx:
+    image: nginx:alpine
+    container_name: speechos-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+    networks:
+      - speechos
+
+volumes:
+  models:
+    driver: local
+  recordings:
+    driver: local
+
+networks:
+  speechos:
+    driver: bridge

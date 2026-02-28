@@ -1,0 +1,187 @@
+# ============================================================
+# Speechos: Docker TTS Engines (GPU)
+# ============================================================
+# These run via WSL2 Docker, one at a time to share GPU.
+# Usage from PowerShell:
+#   bash -c "docker compose -f /mnt/e/dev/GitHub/Speechos/docker/tts-engines.yml up -d xtts"
+#   bash -c "docker compose -f /mnt/e/dev/GitHub/Speechos/docker/tts-engines.yml stop xtts"
+#
+# Or from the API: POST /system/switch-model auto-manages containers.
+# ============================================================
+
+services:
+  # ── XTTS-v2 / Coqui TTS (official image) ─────────────
+  # 17 languages, voice cloning, 1.8GB model
+  # API: GET /api/tts?text=...&language_id=en
+  xtts:
+    image: ghcr.io/coqui-ai/tts
+    container_name: speechos-tts-xtts
+    ports:
+      - "36310:5002"
+    volumes:
+      - tts-xtts-models:/root/.local/share/tts
+      - ../samples:/voice_samples:ro
+    command: >
+      --model_name tts_models/multilingual/multi-dataset/xtts_v2
+      --server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── ChatTTS (dialog-optimized TTS) ────────────────────
+  # Natural dialog speech with prosody control
+  # API: POST http://localhost:36311/generate (JSON)
+  chattts:
+    image: yikchunnnn/chattts-dockerized:latest
+    container_name: speechos-tts-chattts
+    ports:
+      - "36311:9000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── MeloTTS (multilingual, fast) ──────────────────────
+  # 6 languages, Gradio UI + REST API
+  # API: POST /tts/convert/tts {"text":"...","language":"EN","speaker_id":"EN-US"}
+  melotts:
+    image: sensejworld/melotts:v0.0.4
+    container_name: speechos-tts-melotts
+    ports:
+      - "36312:8888"
+    environment:
+      - TTS_LANGUAGES=EN
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── Orpheus TTS (emotional speech, 3B) ────────────────
+  # Expressive with emotion tags, Gradio UI + REST API
+  # API: POST /api/synthesize {"text":"..."}
+  orpheus:
+    image: neosun/orpheus-tts:v1.5.0-allinone
+    container_name: speechos-tts-orpheus
+    ports:
+      - "36313:8899"
+    volumes:
+      - tts-orpheus-cache:/workspace
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── Fish Speech 1.5 (official image) ──────────────────
+  # Voice cloning, real-time streaming, high quality
+  # API: WebUI on port 7860, API server  
+  fish-speech:
+    image: fishaudio/fish-speech:server-cuda
+    container_name: speechos-tts-fish
+    ports:
+      - "36314:8080"
+    volumes:
+      - tts-fish-checkpoints:/app/checkpoints
+      - ../samples:/app/references:ro
+    environment:
+      - COMPILE=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── CosyVoice 2 (multilingual, voice cloning) ────────
+  # Zero-shot voice cloning, streaming synthesis
+  # API: HTTP on port 8080
+  cosyvoice:
+    image: catcto/cosyvoice:latest
+    container_name: speechos-tts-cosyvoice
+    ports:
+      - "36315:8080"
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── Qwen3-TTS (SOTA quality, 0.6B/1.7B) ─────────────
+  # OpenAI-compatible API, voice cloning, 10 languages, 9 voices
+  # API: POST /v1/audio/speech (OpenAI-compatible drop-in replacement)
+  # Voices: alloy/Vivian, echo/Ryan, fable/Sophia, nova/Isabella, onyx/Evan, shimmer/Lily
+  # Source: https://github.com/groxaxo/Qwen3-TTS-Openai-Fastapi
+  qwen3-tts:
+    build:
+      context: ./qwen3-tts-openai
+      dockerfile: Dockerfile
+      target: production
+    image: speechos-qwen3-tts
+    container_name: speechos-tts-qwen3
+    user: root
+    ports:
+      - "36316:8880"
+    environment:
+      - TTS_WARMUP_ON_START=true
+      - PORT=8880
+      - HF_HOME=/root/.cache/huggingface
+    volumes:
+      - tts-qwen3-models:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── Parler-TTS (description-driven voice) ─────────────
+  # OpenAI-compatible API, natural voice descriptions
+  # API: POST /v1/audio/speech {"input":"...","voice":"description"}
+  parler:
+    image: fedirz/parler-tts-server:latest
+    container_name: speechos-tts-parler
+    ports:
+      - "36317:8000"
+    volumes:
+      - tts-parler-models:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+volumes:
+  tts-xtts-models:
+  tts-orpheus-cache:
+  tts-fish-checkpoints:
+  tts-qwen3-models:
+  tts-parler-models:

@@ -1,0 +1,848 @@
+{
+  "1. librosa": {
+    "test_aggressive.wav": {
+      "duration_s": 5.0,
+      "pitch_mean_hz": 283.7,
+      "pitch_std_hz": 162.6,
+      "rms_energy": 0.4025,
+      "zcr": 0.3012,
+      "mfcc1_mean": 77.01,
+      "spectral_centroid_hz": 2995.4,
+      "spectral_rolloff_hz": 5015.4,
+      "time_ms": 1358.4
+    },
+    "test_calm.wav": {
+      "duration_s": 5.0,
+      "pitch_mean_hz": 207.1,
+      "pitch_std_hz": 146.9,
+      "rms_energy": 0.4554,
+      "zcr": 0.0427,
+      "mfcc1_mean": -26.15,
+      "spectral_centroid_hz": 1108.6,
+      "spectral_rolloff_hz": 1967.4,
+      "time_ms": 17.5
+    },
+    "test_energetic.wav": {
+      "duration_s": 5.0,
+      "pitch_mean_hz": 278.9,
+      "pitch_std_hz": 156.5,
+      "rms_energy": 0.4768,
+      "zcr": 0.1882,
+      "mfcc1_mean": 58.09,
+      "spectral_centroid_hz": 2209.4,
+      "spectral_rolloff_hz": 3659.7,
+      "time_ms": 16.4
+    },
+    "test_low.wav": {
+      "duration_s": 5.0,
+      "pitch_mean_hz": 158.6,
+      "pitch_std_hz": 128.6,
+      "rms_energy": 0.4697,
+      "zcr": 0.0247,
+      "mfcc1_mean": -76.41,
+      "spectral_centroid_hz": 978.9,
+      "spectral_rolloff_hz": 1840.1,
+      "time_ms": 16.9
+    },
+    "test_silence.wav": {
+      "duration_s": 3.0,
+      "pitch_mean_hz": 69.3,
+      "pitch_std_hz": 25.6,
+      "rms_energy": 0.0099,
+      "zcr": 0.4939,
+      "mfcc1_mean": -234.05,
+      "spectral_centroid_hz": 3999.1,
+      "spectral_rolloff_hz": 6804.4,
+      "time_ms": 9.4
+    },
+    "test_tone.wav": {
+      "duration_s": 2.0,
+      "pitch_mean_hz": 300.3,
+      "pitch_std_hz": 0.1,
+      "rms_energy": 0.2098,
+      "zcr": 0.0366,
+      "mfcc1_mean": -515.07,
+      "spectral_centroid_hz": 308.3,
+      "spectral_rolloff_hz": 307.9,
+      "time_ms": 6.2
+    }
+  },
+  "2. openSMILE (eGeMAPSv02)": {
+    "test_aggressive.wav": {
+      "total_features": 88,
+      "key_features": {
+        "F0semitoneFrom27.5Hz_sma3nz_amean": 57.3383,
+        "jitterLocal_sma3nz_amean": 0.0199,
+        "shimmerLocaldB_sma3nz_amean": 0.5606,
+        "HNRdBACF_sma3nz_amean": 5.956,
+        "logRelF0-H1-H2_sma3nz_amean": 3.0461,
+        "loudness_sma3_amean": 3.3353
+      },
+      "time_ms": 54.8
+    },
+    "test_calm.wav": {
+      "total_features": 88,
+      "key_features": {
+        "F0semitoneFrom27.5Hz_sma3nz_amean": 43.8102,
+        "jitterLocal_sma3nz_amean": 0.0414,
+        "shimmerLocaldB_sma3nz_amean": 0.3248,
+        "HNRdBACF_sma3nz_amean": 8.8023,
+        "logRelF0-H1-H2_sma3nz_amean": 8.5665,
+        "loudness_sma3_amean": 1.9941
+      },
+      "time_ms": 56.4
+    },
+    "test_energetic.wav": {
+      "total_features": 88,
+      "key_features": {
+        "F0semitoneFrom27.5Hz_sma3nz_amean": 54.7638,
+        "jitterLocal_sma3nz_amean": 0.0383,
+        "shimmerLocaldB_sma3nz_amean": 0.3623,
+        "HNRdBACF_sma3nz_amean": 3.9293,
+        "logRelF0-H1-H2_sma3nz_amean": 1.2532,
+        "loudness_sma3_amean": 3.0834
+      },
+      "time_ms": 55.8
+    },
+    "test_low.wav": {
+      "total_features": 88,
+      "key_features": {
+        "F0semitoneFrom27.5Hz_sma3nz_amean": 34.92,
+        "jitterLocal_sma3nz_amean": 0.0773,
+        "shimmerLocaldB_sma3nz_amean": 0.3913,
+        "HNRdBACF_sma3nz_amean": 8.2436,
+        "logRelF0-H1-H2_sma3nz_amean": 7.1439,
+        "loudness_sma3_amean": 1.5198
+      },
+      "time_ms": 56.4
+    },
+    "test_silence.wav": {
+      "total_features": 88,
+      "key_features": {
+        "F0semitoneFrom27.5Hz_sma3nz_amean": 0.0,
+        "jitterLocal_sma3nz_amean": 0.0,
+        "shimmerLocaldB_sma3nz_amean": 0.0,
+        "HNRdBACF_sma3nz_amean": 0.0,
+        "logRelF0-H1-H2_sma3nz_amean": 0.0,
+        "loudness_sma3_amean": 0.4708
+      },
+      "time_ms": 32.9
+    },
+    "test_tone.wav": {
+      "total_features": 88,
+      "key_features": {
+        "F0semitoneFrom27.5Hz_sma3nz_amean": 41.3465,
+        "jitterLocal_sma3nz_amean": 0.0,
+        "shimmerLocaldB_sma3nz_amean": 0.0046,
+        "HNRdBACF_sma3nz_amean": 16.8857,
+        "logRelF0-H1-H2_sma3nz_amean": 7.6319,
+        "loudness_sma3_amean": 0.4686
+      },
+      "time_ms": 34.5
+    }
+  },
+  "3. Silero VAD": {
+    "test_aggressive.wav": {
+      "n_speech_segments": 0,
+      "total_speech_seconds": 0,
+      "segments": [],
+      "time_ms": 86.4
+    },
+    "test_calm.wav": {
+      "n_speech_segments": 1,
+      "total_speech_seconds": 3.164,
+      "segments": [
+        {
+          "start_s": 0.29,
+          "end_s": 3.454
+        }
+      ],
+      "time_ms": 26.1
+    },
+    "test_energetic.wav": {
+      "n_speech_segments": 1,
+      "total_speech_seconds": 0.892,
+      "segments": [
+        {
+          "start_s": 0.066,
+          "end_s": 0.958
+        }
+      ],
+      "time_ms": 25.4
+    },
+    "test_low.wav": {
+      "n_speech_segments": 1,
+      "total_speech_seconds": 4.742,
+      "segments": [
+        {
+          "start_s": 0.258,
+          "end_s": 5.0
+        }
+      ],
+      "time_ms": 23.9
+    },
+    "test_silence.wav": {
+      "n_speech_segments": 0,
+      "total_speech_seconds": 0,
+      "segments": [],
+      "time_ms": 17.7
+    },
+    "test_tone.wav": {
+      "n_speech_segments": 0,
+      "total_speech_seconds": 0,
+      "segments": [],
+      "time_ms": 9.6
+    }
+  },
+  "4. emotion2vec+ large": {
+    "test_aggressive.wav": {
+      "top_emotion": "angry",
+      "top_score": 0.9998,
+      "all_scores": {
+        "angry": 0.9998,
+        "disgusted": 0.0,
+        "fearful": 0.0,
+        "happy": 0.0,
+        "neutral": 0.0001,
+        "other": 0.0,
+        "sad": 0.0001,
+        "surprised": 0.0,
+        "<unk>": 0.0
+      },
+      "time_ms": 283.7
+    },
+    "test_calm.wav": {
+      "top_emotion": "angry",
+      "top_score": 0.4527,
+      "all_scores": {
+        "angry": 0.4527,
+        "disgusted": 0.0093,
+        "fearful": 0.0121,
+        "happy": 0.3218,
+        "neutral": 0.0171,
+        "other": 0.0034,
+        "sad": 0.0757,
+        "surprised": 0.0144,
+        "<unk>": 0.0935
+      },
+      "time_ms": 81.1
+    },
+    "test_energetic.wav": {
+      "top_emotion": "angry",
+      "top_score": 1.0,
+      "all_scores": {
+        "angry": 1.0,
+        "disgusted": 0.0,
+        "fearful": 0.0,
+        "happy": 0.0,
+        "neutral": 0.0,
+        "other": 0.0,
+        "sad": 0.0,
+        "surprised": 0.0,
+        "<unk>": 0.0
+      },
+      "time_ms": 70.8
+    },
+    "test_low.wav": {
+      "top_emotion": "happy",
+      "top_score": 0.8132,
+      "all_scores": {
+        "angry": 0.0211,
+        "disgusted": 0.0023,
+        "fearful": 0.0046,
+        "happy": 0.8132,
+        "neutral": 0.0061,
+        "other": 0.0003,
+        "sad": 0.0936,
+        "surprised": 0.012,
+        "<unk>": 0.0468
+      },
+      "time_ms": 74.1
+    },
+    "test_silence.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.9492,
+      "all_scores": {
+        "angry": 0.0002,
+        "disgusted": 0.0054,
+        "fearful": 0.0004,
+        "happy": 0.0043,
+        "neutral": 0.0359,
+        "other": 0.004,
+        "sad": 0.9492,
+        "surprised": 0.0001,
+        "<unk>": 0.0005
+      },
+      "time_ms": 75.1
+    },
+    "test_tone.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.5695,
+      "all_scores": {
+        "angry": 0.0042,
+        "disgusted": 0.0017,
+        "fearful": 0.0048,
+        "happy": 0.1102,
+        "neutral": 0.0126,
+        "other": 0.0,
+        "sad": 0.5695,
+        "surprised": 0.2969,
+        "<unk>": 0.0
+      },
+      "time_ms": 77.7
+    }
+  },
+  "5. wav2vec2 SER (ehcalabres XLSR)": {
+    "test_aggressive.wav": {
+      "top_emotion": "fearful",
+      "top_score": 0.1335,
+      "all_scores": {
+        "fearful": 0.1335,
+        "sad": 0.1305,
+        "angry": 0.1303,
+        "happy": 0.1301,
+        "surprised": 0.1246,
+        "calm": 0.1208,
+        "disgust": 0.119,
+        "neutral": 0.1112
+      },
+      "time_ms": 78.9
+    },
+    "test_calm.wav": {
+      "top_emotion": "fearful",
+      "top_score": 0.1331,
+      "all_scores": {
+        "fearful": 0.1331,
+        "happy": 0.1314,
+        "sad": 0.1302,
+        "angry": 0.1291,
+        "calm": 0.123,
+        "disgust": 0.1218,
+        "surprised": 0.1165,
+        "neutral": 0.1149
+      },
+      "time_ms": 14.8
+    },
+    "test_energetic.wav": {
+      "top_emotion": "happy",
+      "top_score": 0.1365,
+      "all_scores": {
+        "happy": 0.1365,
+        "fearful": 0.1343,
+        "angry": 0.1288,
+        "calm": 0.1267,
+        "surprised": 0.126,
+        "sad": 0.1232,
+        "disgust": 0.1155,
+        "neutral": 0.1091
+      },
+      "time_ms": 14.8
+    },
+    "test_low.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.1338,
+      "all_scores": {
+        "sad": 0.1338,
+        "fearful": 0.1298,
+        "happy": 0.1271,
+        "angry": 0.1257,
+        "calm": 0.123,
+        "disgust": 0.1225,
+        "surprised": 0.1202,
+        "neutral": 0.1179
+      },
+      "time_ms": 14.8
+    },
+    "test_silence.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.132,
+      "all_scores": {
+        "sad": 0.132,
+        "neutral": 0.1277,
+        "surprised": 0.1276,
+        "calm": 0.1264,
+        "happy": 0.1259,
+        "angry": 0.1235,
+        "fearful": 0.1216,
+        "disgust": 0.1153
+      },
+      "time_ms": 12.4
+    },
+    "test_tone.wav": {
+      "top_emotion": "neutral",
+      "top_score": 0.1334,
+      "all_scores": {
+        "neutral": 0.1334,
+        "surprised": 0.1321,
+        "calm": 0.1297,
+        "happy": 0.1263,
+        "sad": 0.1233,
+        "fearful": 0.119,
+        "angry": 0.119,
+        "disgust": 0.1172
+      },
+      "time_ms": 12.3
+    }
+  },
+  "6. wav2vec2 SER (r-f 97.5%)": {
+    "test_aggressive.wav": {
+      "top_emotion": "happy",
+      "top_score": 0.1514,
+      "all_scores": {
+        "happy": 0.1514,
+        "fear": 0.1497,
+        "disgust": 0.1467,
+        "angry": 0.1423,
+        "neutral": 0.1401,
+        "surprise": 0.1387,
+        "sad": 0.1312
+      },
+      "time_ms": 19.1
+    },
+    "test_calm.wav": {
+      "top_emotion": "disgust",
+      "top_score": 0.1541,
+      "all_scores": {
+        "disgust": 0.1541,
+        "neutral": 0.1526,
+        "fear": 0.1454,
+        "happy": 0.14,
+        "surprise": 0.1399,
+        "angry": 0.1399,
+        "sad": 0.128
+      },
+      "time_ms": 20.2
+    },
+    "test_energetic.wav": {
+      "top_emotion": "angry",
+      "top_score": 0.1496,
+      "all_scores": {
+        "angry": 0.1496,
+        "fear": 0.1484,
+        "happy": 0.1471,
+        "neutral": 0.1432,
+        "surprise": 0.1392,
+        "disgust": 0.1369,
+        "sad": 0.1356
+      },
+      "time_ms": 16.5
+    },
+    "test_low.wav": {
+      "top_emotion": "disgust",
+      "top_score": 0.1554,
+      "all_scores": {
+        "disgust": 0.1554,
+        "neutral": 0.1529,
+        "fear": 0.1443,
+        "happy": 0.1418,
+        "surprise": 0.1414,
+        "angry": 0.1392,
+        "sad": 0.1251
+      },
+      "time_ms": 18.6
+    },
+    "test_silence.wav": {
+      "top_emotion": "disgust",
+      "top_score": 0.1517,
+      "all_scores": {
+        "disgust": 0.1517,
+        "surprise": 0.1511,
+        "sad": 0.1495,
+        "happy": 0.1481,
+        "angry": 0.1458,
+        "fear": 0.1269,
+        "neutral": 0.1269
+      },
+      "time_ms": 13.7
+    },
+    "test_tone.wav": {
+      "top_emotion": "surprise",
+      "top_score": 0.1548,
+      "all_scores": {
+        "surprise": 0.1548,
+        "neutral": 0.145,
+        "angry": 0.1433,
+        "disgust": 0.1418,
+        "sad": 0.1408,
+        "fear": 0.1404,
+        "happy": 0.1339
+      },
+      "time_ms": 12.4
+    }
+  },
+  "7. wav2vec2 SER (Dpngtm IEMOCAP)": {
+    "error": "OSError: Dpngtm/emotion-recognition-wav2vec2-IEMOCAP is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'\nIf this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`"
+  },
+  "8. WavLM SER (audeering A/D/V)": {
+    "test_aggressive.wav": {
+      "arousal": 0.0008,
+      "dominance": -0.0054,
+      "valence": -0.0203,
+      "time_ms": 54.3
+    },
+    "test_calm.wav": {
+      "arousal": 0.0278,
+      "dominance": -0.0021,
+      "valence": -0.0053,
+      "time_ms": 49.5
+    },
+    "test_energetic.wav": {
+      "arousal": 0.0087,
+      "dominance": -0.0042,
+      "valence": -0.0257,
+      "time_ms": 41.0
+    },
+    "test_low.wav": {
+      "arousal": 0.0172,
+      "dominance": 0.0014,
+      "valence": -0.0063,
+      "time_ms": 9.0
+    },
+    "test_silence.wav": {
+      "arousal": -0.0051,
+      "dominance": 0.0038,
+      "valence": 0.0165,
+      "time_ms": 10.3
+    },
+    "test_tone.wav": {
+      "arousal": -0.0072,
+      "dominance": 0.0197,
+      "valence": 0.0082,
+      "time_ms": 6.7
+    }
+  },
+  "9. wav2small (audeering tiny A/D/V)": {
+    "test_aggressive.wav": {
+      "arousal": 0.7487,
+      "dominance": 0.7042,
+      "valence": 0.3433,
+      "time_ms": 558.0
+    },
+    "test_calm.wav": {
+      "arousal": 0.8182,
+      "dominance": 0.7352,
+      "valence": 0.2806,
+      "time_ms": 2.6
+    },
+    "test_energetic.wav": {
+      "arousal": 0.8896,
+      "dominance": 0.8199,
+      "valence": 0.2692,
+      "time_ms": 1.8
+    },
+    "test_low.wav": {
+      "arousal": 0.4352,
+      "dominance": 0.3648,
+      "valence": 0.3169,
+      "time_ms": 1.7
+    },
+    "test_silence.wav": {
+      "arousal": 0.6479,
+      "dominance": 0.6376,
+      "valence": 0.3684,
+      "time_ms": 7.0
+    },
+    "test_tone.wav": {
+      "arousal": 0.6776,
+      "dominance": 0.6876,
+      "valence": 0.2272,
+      "time_ms": 5.6
+    }
+  },
+  "10. Resemblyzer Diarization": {
+    "test_aggressive.wav": {
+      "n_segments_analyzed": 4,
+      "estimated_speakers": "2+",
+      "mean_similarity": 0.7268,
+      "time_ms": 72.5
+    },
+    "test_calm.wav": {
+      "n_segments_analyzed": 4,
+      "estimated_speakers": "2+",
+      "mean_similarity": 0.7507,
+      "time_ms": 36.4
+    },
+    "test_energetic.wav": {
+      "n_segments_analyzed": 4,
+      "estimated_speakers": "2+",
+      "mean_similarity": 0.6549,
+      "time_ms": 44.1
+    },
+    "test_low.wav": {
+      "n_segments_analyzed": 3,
+      "estimated_speakers": 1,
+      "mean_similarity": 0.9043,
+      "time_ms": 30.7
+    },
+    "test_silence.wav": {
+      "n_segments_analyzed": 0,
+      "estimated_speakers": 0,
+      "mean_similarity": 0.0,
+      "time_ms": 2.2
+    },
+    "test_tone.wav": {
+      "n_segments_analyzed": 1,
+      "estimated_speakers": 1,
+      "mean_similarity": 1.0,
+      "time_ms": 11.4
+    }
+  },
+  "7. wav2vec2 SER (Dpngtm)": {
+    "test_aggressive.wav": {
+      "top_emotion": "fearful",
+      "top_score": 0.4522,
+      "all_scores": {
+        "fearful": 0.4522,
+        "sad": 0.3909,
+        "disgust": 0.1428,
+        "happy": 0.0072,
+        "angry": 0.0031,
+        "calm": 0.002,
+        "surprised": 0.0017
+      },
+      "time_ms": 1290.2
+    },
+    "test_calm.wav": {
+      "top_emotion": "fearful",
+      "top_score": 0.9363,
+      "all_scores": {
+        "fearful": 0.9363,
+        "sad": 0.0325,
+        "happy": 0.0145,
+        "disgust": 0.0121,
+        "angry": 0.0029,
+        "surprised": 0.0011,
+        "calm": 0.0006
+      },
+      "time_ms": 6.1
+    },
+    "test_energetic.wav": {
+      "top_emotion": "fearful",
+      "top_score": 0.6467,
+      "all_scores": {
+        "fearful": 0.6467,
+        "disgust": 0.1882,
+        "sad": 0.1213,
+        "happy": 0.0214,
+        "angry": 0.0169,
+        "surprised": 0.0041,
+        "calm": 0.0015
+      },
+      "time_ms": 11.9
+    },
+    "test_low.wav": {
+      "top_emotion": "surprised",
+      "top_score": 0.971,
+      "all_scores": {
+        "surprised": 0.971,
+        "happy": 0.0071,
+        "sad": 0.0067,
+        "disgust": 0.0063,
+        "fearful": 0.0061,
+        "angry": 0.0021,
+        "calm": 0.0008
+      },
+      "time_ms": 5.6
+    },
+    "test_silence.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.4551,
+      "all_scores": {
+        "sad": 0.4551,
+        "fearful": 0.4037,
+        "disgust": 0.1295,
+        "happy": 0.0054,
+        "angry": 0.0027,
+        "calm": 0.0023,
+        "surprised": 0.0013
+      },
+      "time_ms": 11.4
+    },
+    "test_tone.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.9359,
+      "all_scores": {
+        "sad": 0.9359,
+        "fearful": 0.0406,
+        "disgust": 0.0177,
+        "calm": 0.0045,
+        "surprised": 0.0006,
+        "happy": 0.0005,
+        "angry": 0.0002
+      },
+      "time_ms": 10.7
+    }
+  },
+  "8. HuBERT SER (superb-er)": {
+    "test_aggressive.wav": {
+      "top_emotion": "ang",
+      "top_score": 0.639,
+      "all_scores": {
+        "ang": 0.639,
+        "hap": 0.2215,
+        "neu": 0.1175,
+        "sad": 0.022
+      },
+      "time_ms": 103.2
+    },
+    "test_calm.wav": {
+      "top_emotion": "hap",
+      "top_score": 0.8751,
+      "all_scores": {
+        "hap": 0.8751,
+        "sad": 0.1041,
+        "neu": 0.0203,
+        "ang": 0.0004
+      },
+      "time_ms": 16.9
+    },
+    "test_energetic.wav": {
+      "top_emotion": "ang",
+      "top_score": 0.8586,
+      "all_scores": {
+        "ang": 0.8586,
+        "hap": 0.1327,
+        "sad": 0.0047,
+        "neu": 0.004
+      },
+      "time_ms": 25.0
+    },
+    "test_low.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.9623,
+      "all_scores": {
+        "sad": 0.9623,
+        "hap": 0.025,
+        "neu": 0.0126,
+        "ang": 0.0001
+      },
+      "time_ms": 20.3
+    },
+    "test_silence.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.8133,
+      "all_scores": {
+        "sad": 0.8133,
+        "neu": 0.1207,
+        "hap": 0.066,
+        "ang": 0.0
+      },
+      "time_ms": 14.9
+    },
+    "test_tone.wav": {
+      "top_emotion": "sad",
+      "top_score": 0.9949,
+      "all_scores": {
+        "sad": 0.9949,
+        "hap": 0.0048,
+        "neu": 0.0003,
+        "ang": 0.0
+      },
+      "time_ms": 13.5
+    }
+  },
+  "0. faster-whisper STT (large-v3)": {
+    "test_aggressive.wav": {
+      "language": "en",
+      "language_probability": 1,
+      "duration_s": 5.0,
+      "n_segments": 1,
+      "transcription": "Woof, woof, woof, woof, woof, woof.",
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 5.0,
+          "text": "Woof, woof, woof, woof, woof, woof.",
+          "avg_logprob": -0.5472,
+          "no_speech_prob": 0.645
+        }
+      ],
+      "time_ms": 514.4
+    },
+    "test_calm.wav": {
+      "language": "en",
+      "language_probability": 1,
+      "duration_s": 5.0,
+      "n_segments": 1,
+      "transcription": "w b",
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 4.92,
+          "text": "w b",
+          "avg_logprob": -3.3469,
+          "no_speech_prob": 0.5825
+        }
+      ],
+      "time_ms": 8015.0
+    },
+    "test_energetic.wav": {
+      "language": "en",
+      "language_probability": 1,
+      "duration_s": 5.0,
+      "n_segments": 1,
+      "transcription": "Woo-woo!",
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 0.42,
+          "text": "Woo-woo!",
+          "avg_logprob": -0.753,
+          "no_speech_prob": 0.5493
+        }
+      ],
+      "time_ms": 617.7
+    },
+    "test_low.wav": {
+      "language": "en",
+      "language_probability": 1,
+      "duration_s": 5.0,
+      "n_segments": 1,
+      "transcription": "Woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop wo",
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 5.0,
+          "text": "Woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop woop wo",
+          "avg_logprob": -0.0929,
+          "no_speech_prob": 0.5962
+        }
+      ],
+      "time_ms": 8436.9
+    },
+    "test_silence.wav": {
+      "language": "en",
+      "language_probability": 1,
+      "duration_s": 3.0,
+      "n_segments": 1,
+      "transcription": "Thank you.",
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 29.98,
+          "text": "Thank you.",
+          "avg_logprob": -0.2415,
+          "no_speech_prob": 0.8359
+        }
+      ],
+      "time_ms": 317.5
+    },
+    "test_tone.wav": {
+      "language": "en",
+      "language_probability": 1,
+      "duration_s": 2.0,
+      "n_segments": 1,
+      "transcription": "Thanks for watching!",
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 29.98,
+          "text": "Thanks for watching!",
+          "avg_logprob": -0.6401,
+          "no_speech_prob": 0.8423
+        }
+      ],
+      "time_ms": 305.3
+    }
+  }
+}

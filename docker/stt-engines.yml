@@ -1,0 +1,175 @@
+# ============================================================
+# Speechos: Docker STT Engines (GPU)
+# ============================================================
+# Run one at a time to share GPU. Each exposes an HTTP API.
+#
+# Usage:
+#   docker compose -f docker/stt-engines.yml up -d speaches
+#   docker compose -f docker/stt-engines.yml stop speaches
+#
+# Or from the API: POST /system/switch-model auto-manages containers.
+# ============================================================
+
+services:
+  # ── Speaches (faster-whisper, OpenAI-compatible) ─────
+  # Dynamic model loading, streaming, best overall STT server
+  # API: POST /v1/audio/transcriptions (OpenAI-compatible)
+  # Docs: http://localhost:36320/docs
+  speaches:
+    image: ghcr.io/speaches-ai/speaches:latest-cuda
+    container_name: speechos-stt-speaches
+    ports:
+      - "36320:8000"
+    volumes:
+      - stt-speaches-cache:/home/ubuntu/.cache/huggingface/hub
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── Whisper ASR Webservice (3 engines in one) ────────
+  # Supports: openai_whisper, faster_whisper, whisperx
+  # API: POST /asr (multipart audio), POST /detect-language
+  # Docs: http://localhost:36321/docs
+  whisper-asr:
+    image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    container_name: speechos-stt-whisper-asr
+    ports:
+      - "36321:9000"
+    environment:
+      - ASR_MODEL=large-v3
+      - ASR_ENGINE=faster_whisper
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── Whisper.cpp (C++ GGML, low memory) ───────────────
+  # API: POST /inference (multipart audio)
+  # Also: POST /v1/audio/transcriptions (with --inference-path flag)
+  # Note: Download model first to ./models/ directory
+  whisper-cpp:
+    image: ghcr.io/ggml-org/whisper.cpp:main-cuda
+    container_name: speechos-stt-whisper-cpp
+    ports:
+      - "36322:8080"
+    volumes:
+      - ../models:/models:ro
+    command: >
+      whisper-server --host 0.0.0.0 --port 8080
+      -m /models/ggml-large-v3.bin
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── LinTO NeMo (Parakeet TDT, no NGC key needed) ────
+  # API: POST /transcribe (multipart audio)
+  # Docs: http://localhost:36323/docs
+  linto-nemo:
+    image: lintoai/linto-stt-nemo
+    container_name: speechos-stt-linto-nemo
+    ports:
+      - "36323:80"
+    environment:
+      - SERVICE_MODE=http
+      - MODEL=nvidia/parakeet-tdt-0.6b-v2
+      - ARCHITECTURE=rnnt_bpe
+      - DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── LinTO NeMo 1.1B (Parakeet TDT 1.1B, best accuracy) ─
+  # Same LinTO wrapper, larger model: ~4-7 GB VRAM, 2000x RT
+  # Note: Outputs lowercase only (no punctuation/capitalization)
+  # API: POST /transcribe (multipart audio)
+  # Docs: http://localhost:36327/docs
+  linto-nemo-1.1b:
+    image: lintoai/linto-stt-nemo
+    container_name: speechos-stt-linto-nemo-1.1b
+    ports:
+      - "36327:80"
+    environment:
+      - SERVICE_MODE=http
+      - MODEL=nvidia/parakeet-tdt-1.1b
+      - ARCHITECTURE=rnnt_bpe
+      - DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── LinTO Whisper (GPU, supports HF model IDs) ──────
+  # API: POST /transcribe (multipart audio)
+  # Docs: http://localhost:36324/docs
+  linto-whisper:
+    image: lintoai/linto-stt-whisper
+    container_name: speechos-stt-linto-whisper
+    ports:
+      - "36324:80"
+    environment:
+      - SERVICE_MODE=http
+      - MODEL=large-v3
+      - DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── WhisperX API (transcription + diarization) ───────
+  # API: POST endpoint with diarization support
+  # Docs: http://localhost:36325/docs
+  whisperx-api:
+    image: pluja/whisperx-api
+    container_name: speechos-stt-whisperx
+    ports:
+      - "36325:8000"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
+  # ── Vosk (lightweight, WebSocket only) ───────────────
+  # Protocol: WebSocket ws://localhost:36326
+  # Note: NOT REST: uses WebSocket for streaming recognition
+  vosk:
+    image: alphacep/kaldi-en:latest
+    container_name: speechos-stt-vosk
+    ports:
+      - "36326:2700"
+    restart: "no"
+
+volumes:
+  stt-speaches-cache:
