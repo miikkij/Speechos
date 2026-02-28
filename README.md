@@ -11,6 +11,21 @@ There are dozens of speech-to-text, text-to-speech, and emotion recognition mode
 
 Record speech, transcribe it with different STT engines, analyze emotion, detect speakers, synthesize speech with different TTS voices: and switch models with a dropdown to see how they compare.
 
+<p align="center">
+  <img src="images/stt1.png" width="360" alt="Record & Transcribe: model selection, recording, saved recordings" />
+  <img src="images/stt2.png" width="360" alt="Audio analysis: transcription, emotion, pitch, speakers" />
+</p>
+<p align="center">
+  <em>Record & Transcribe: pick an STT engine, record or upload, get transcription + full audio analysis</em>
+</p>
+
+<p align="center">
+  <img src="images/tts1.png" width="450" alt="Text to Speech: engine selection, synthesis, markup guide" />
+</p>
+<p align="center">
+  <em>Text to Speech: switch engines, type text, hear the result instantly</em>
+</p>
+
 ---
 
 ## Quick Start
