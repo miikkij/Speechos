@@ -21,14 +21,18 @@ tier: auto
 # These take precedence over tier defaults.
 
 # stt:
-#   engine: faster-whisper      # faster-whisper | vosk | whisperx
+#   engine: faster-whisper      # faster-whisper | vosk | whisperx | moonshine | nemo | wav2vec2-stt | granite-speech
 #   model: large-v3             # tiny | base | small | medium | large-v3 | turbo
+#                               # nemo: nvidia/parakeet-tdt-0.6b-v3 | nvidia/canary-qwen-2.5b | nvidia/canary-1b-v2
+#                               # granite-speech: ibm-granite/granite-speech-4.1-2b
 #   device: cuda                # cuda | cpu
 #   compute_type: float16       # float16 | int8_float16 | int8
 
 # tts:
-#   engine: kokoro              # kokoro | piper | orpheus | chatterbox | bark | xtts
-#   model: kokoro-v0.19
+#   # Native (in-process): piper | kokoro | kitten | chatterbox | bark | espeak
+#   # Docker (WSL2 GPU):   vibevoice | qwen3-tts | xtts | chattts | melotts | orpheus | fish-speech | cosyvoice | parler
+#   engine: kokoro
+#   model: default
 #   device: cuda
 
 # tts_expressive:
@@ -42,13 +46,20 @@ tier: auto
 #   model: en_US-lessac-medium
 #   device: cpu
 
+# Long-form / multi-speaker (podcast) synthesis — VibeVoice (Docker, GPU-only):
+# tts_clone:
+#   engine: vibevoice           # community fork via OpenAI-compatible server
+#   model: vibevoice/VibeVoice-1.5B
+#   device: cuda
+
 # emotion:
-#   engine: emotion2vec         # emotion2vec | wav2vec2 | wav2small
-#   model: emotion2vec+large    # emotion2vec+seed | emotion2vec+base | emotion2vec+large
+#   engine: emotion2vec         # emotion2vec | wav2vec2-ser | hubert-ser | wavlm-ser | wav2small
+#   model: iic/emotion2vec_plus_large   # iic/emotion2vec_base_finetuned | iic/emotion2vec_plus_large
 #   device: cuda
 
 # diarization:
-#   engine: pyannote
+#   engine: pyannote            # pyannote | sortformer | speechbrain | resemblyzer
+#   model: pyannote/speaker-diarization-community-1   # 4.0, free (supersedes 3.1)
 #   device: cpu
 
 # vad:

@@ -179,4 +179,35 @@ async def transcribe(
             "processing_time": round(elapsed, 3),
         }
 
+    if stt_cfg and stt_cfg.engine == "granite-speech":
+        # IBM Granite-Speech — chat-template prompt with an <|audio|> placeholder
+        import torch
+
+        processor = stt["processor"]
+        model = stt["model"]
+        device = stt["device"]
+        chat = [{
+            "role": "user",
+            "content": "<|audio|>can you transcribe the speech into a written format?",
+        }]
+        prompt = processor.tokenizer.apply_chat_template(
+            chat, tokenize=False, add_generation_prompt=True
+        )
+        audio_tensor = torch.tensor(audio).unsqueeze(0)
+        inputs = processor(prompt, audio_tensor, device=device, return_tensors="pt").to(device)
+        with torch.no_grad():
+            output = model.generate(**inputs, max_new_tokens=512, do_sample=False)
+        new_tokens = output[:, inputs["input_ids"].shape[1]:]
+        text = processor.tokenizer.batch_decode(new_tokens, skip_special_tokens=True)[0]
+
+        elapsed = time.perf_counter() - t0
+        return {
+            "text": text.strip(),
+            "segments": [],
+            "language": language or "en",
+            "language_probability": 1.0,
+            "duration": round(duration, 3),
+            "processing_time": round(elapsed, 3),
+        }
+
     raise HTTPException(500, f"No handler for STT engine: {stt_cfg.engine if stt_cfg else 'none'}")

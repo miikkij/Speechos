@@ -96,6 +96,23 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         },
         "response_type": "wav_binary",
     },
+    # VibeVoice — long-form, multi-speaker podcast TTS (community vibevoice-api,
+    # OpenAI-compatible /v1/audio/speech). Use "Speaker 0:" / "Speaker 1:" prefixes
+    # in the text for multi-speaker scripts. Output is 24kHz WAV.
+    "vibevoice": {
+        "service": "vibevoice",
+        "port": 36318,
+        "health_url": "http://localhost:36318/health",
+        "synth_url": "http://localhost:36318/v1/audio/speech",
+        "synth_method": "POST",
+        "synth_params": lambda text, voice: {
+            "model": "vibevoice/VibeVoice-1.5B",
+            "input": text,
+            "voice": voice or "Frank",
+            "response_format": "wav",
+        },
+        "response_type": "wav_binary",
+    },
 }
 
 # Resolve path to tts-engines.yml (relative to this file)

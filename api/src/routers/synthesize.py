@@ -89,6 +89,14 @@ async def synthesize(req: SynthesizeRequest):
         sample_rate = 24000
         audio_int16 = (audio * 32767).astype(np.int16)
 
+    elif engine == "kitten":
+        # KittenTTS.generate returns a float32 numpy waveform at 24kHz
+        voice = req.voice or "expr-voice-2-f"
+        audio = tts.generate(req.text, voice=voice)
+        audio = np.asarray(audio, dtype=np.float32).squeeze()
+        sample_rate = 24000
+        audio_int16 = (audio * 32767).astype(np.int16)
+
     elif engine == "chatterbox":
         wav = tts.generate(req.text)
         # Returns tensor [1, samples] at 24kHz

@@ -184,6 +184,10 @@ def run_diarization(
     if model_type == "Pipeline" and hasattr(diarization_model, 'instantiate'):
         return _run_diarization_pyannote(audio, sr, diarization_model)
 
+    # NVIDIA Sortformer (NeMo end-to-end diarization)
+    if model_type == "SortformerEncLabelModel" or hasattr(diarization_model, 'diarize'):
+        return _run_diarization_sortformer(audio, sr, diarization_model)
+
     # SpeechBrain SpeakerRecognition
     if model_type in ("SpeakerRecognition", "EncoderClassifier"):
         return _run_diarization_speechbrain(audio, sr, diarization_model)
@@ -215,6 +219,52 @@ def _run_diarization_pyannote(
             "speaker": speaker,
             "start": round(turn.start, 3),
             "end": round(turn.end, 3),
+            "duration": round(dur, 3),
+        })
+        speaker_times[speaker] = speaker_times.get(speaker, 0.0) + dur
+
+    summary = {
+        "num_speakers": len(speaker_times),
+        "speakers": {spk: round(t, 3) for spk, t in sorted(speaker_times.items())},
+    }
+    return segments, summary
+
+
+def _run_diarization_sortformer(
+    audio: np.ndarray, sr: int, model: Any
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run diarization via NVIDIA Sortformer (NeMo). Returns end-to-end segments.
+
+    NeMo's `diarize()` returns, per file, a list of "start end speaker" strings.
+    """
+    import tempfile
+    import os
+    import soundfile as sf
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        sf.write(tmp.name, audio, sr)
+        tmp_path = tmp.name
+
+    try:
+        predictions = model.diarize(audio=[tmp_path], batch_size=1)
+    finally:
+        os.unlink(tmp_path)
+
+    # predictions is a list (per input file); each item is a list of segment strings
+    file_preds = predictions[0] if predictions else []
+
+    segments: list[dict[str, Any]] = []
+    speaker_times: dict[str, float] = {}
+    for entry in file_preds:
+        parts = str(entry).split()
+        if len(parts) < 3:
+            continue
+        start, end, speaker = float(parts[0]), float(parts[1]), parts[2]
+        dur = end - start
+        segments.append({
+            "speaker": speaker,
+            "start": round(start, 3),
+            "end": round(end, 3),
             "duration": round(dur, 3),
         })
         speaker_times[speaker] = speaker_times.get(speaker, 0.0) + dur

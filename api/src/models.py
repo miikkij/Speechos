@@ -95,6 +95,19 @@ class ModelManager:
                 raise ImportError("transformers not installed. Run: pip install transformers")
             device = 0 if cfg.device == "cuda" else -1
             return pipeline("automatic-speech-recognition", model=cfg.model, device=device)
+        if cfg.engine == "granite-speech":
+            # IBM Granite-Speech 4.1 — speech LLM via transformers (chat template + audio)
+            try:
+                from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+            except ImportError:
+                raise ImportError("transformers not installed. Run: pip install -U transformers")
+            import torch
+            device = "cuda" if cfg.device == "cuda" and torch.cuda.is_available() else "cpu"
+            processor = AutoProcessor.from_pretrained(cfg.model, trust_remote_code=True)
+            model = AutoModelForSpeechSeq2Seq.from_pretrained(
+                cfg.model, trust_remote_code=True
+            ).to(device)
+            return {"processor": processor, "model": model, "device": device}
         raise ValueError(f"Unknown STT engine: {cfg.engine}")
 
     def _load_tts(self, cfg: ModelConfig) -> Any:
@@ -120,6 +133,12 @@ class ModelManager:
             except ImportError:
                 raise ImportError("Kokoro not installed. Run: pip install kokoro")
             return KPipeline(lang_code="a")
+        if cfg.engine == "kitten":
+            try:
+                from kittentts import KittenTTS
+            except ImportError:
+                raise ImportError("Kitten TTS not installed. Run: pip install kittentts")
+            return KittenTTS(cfg.model or "KittenML/kitten-tts-nano-0.8-fp32")
         if cfg.engine == "chatterbox":
             try:
                 from chatterbox.tts import ChatterboxTTS
@@ -333,6 +352,17 @@ class ModelManager:
                 source=f"speechbrain/{cfg.model}",
                 savedir=str(self.model_dir / "speechbrain" / cfg.model),
             )
+        if cfg.engine == "sortformer":
+            # NVIDIA Sortformer — end-to-end diarization via NeMo (GPU)
+            try:
+                from nemo.collections.asr.models import SortformerEncLabelModel
+            except ImportError:
+                raise ImportError("NeMo not installed. Run: pip install nemo_toolkit[asr]")
+            if cfg.device == "cpu":
+                raise ValueError(f"Sortformer model {cfg.model} requires GPU (CUDA)")
+            model = SortformerEncLabelModel.from_pretrained(cfg.model)
+            model.eval()
+            return model
         raise ValueError(f"Unknown diarization engine: {cfg.engine}")
 
     def _download_vosk_model(self, model_name: str, dest: Path) -> None:

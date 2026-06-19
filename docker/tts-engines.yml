@@ -172,9 +172,36 @@ services:
               capabilities: [gpu]
     restart: "no"
 
+  # ── VibeVoice (long-form, multi-speaker podcast TTS) ──
+  # Community fork (vibevoice-community/VibeVoice) served by the OpenAI-compatible
+  # vibevoice-api server. 1.5B model (~7-8GB VRAM); use "Speaker 0:" prefixes for
+  # multi-speaker scripts. GPU-only, 24kHz output.
+  # API: POST /v1/audio/speech {"model":"...","input":"...","voice":"Frank","response_format":"wav"}
+  vibevoice:
+    build:
+      context: ./vibevoice-server
+      dockerfile: Dockerfile
+    image: speechos-vibevoice
+    container_name: speechos-tts-vibevoice
+    ports:
+      - "36318:8000"
+    environment:
+      - VIBEVOICE_MODEL=vibevoice/VibeVoice-1.5B
+    volumes:
+      - tts-vibevoice-models:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"
+
 volumes:
   tts-xtts-models:
   tts-orpheus-cache:
   tts-fish-checkpoints:
   tts-qwen3-models:
   tts-parler-models:
+  tts-vibevoice-models:

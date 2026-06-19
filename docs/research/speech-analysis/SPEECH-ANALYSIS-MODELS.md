@@ -1,10 +1,14 @@
 # Speech Analysis & Emotion Recognition Model Comparison
 
-> Last updated: 2026-02-27
+> Last updated: 2026-06-19
 
 ## Overview
 
 Beyond transcription, speech audio can be analyzed for emotion, sentiment, speaker characteristics, and more. This document covers models for analyzing `.wav` files to extract non-textual insights.
+
+> **2026-06 refresh (what changed since Feb 2026):**
+> - **SER:** `emotion2vec+` is **still the recommended default** — no new foundation model has dethroned it (no update since Jun 2024). Audio-LLMs (Qwen2-Audio, Kimi-Audio, Step-Audio) increasingly do SER but over-rely on transcript semantics and aren't yet acoustically reliable. No swap needed.
+> - **Diarization:** Major update — **pyannote 4.0** ships `pyannote/speaker-diarization-community-1` (CC-BY-4.0, free) which supersedes 3.1 (better counting, exclusive single-speaker mode, lower DER). NVIDIA **Sortformer** (`nvidia/diar_sortformer_4spk-v1` offline, `nvidia/diar_streaming_sortformer_4spk-v2` streaming) is a strong end-to-end ≤4-speaker alternative. **DiariZen** (`BUTSpeechFIT/DiariZen`, WavLM+Conformer) leads accuracy if you fine-tune. ECAPA / Resemblyzer are now dated baselines.
 
 ---
 
@@ -34,9 +38,12 @@ Beyond transcription, speech audio can be analyzed for emotion, sentiment, speak
 
 | Model/Tool | Task | Parameters | CPU Support | Notes |
 |---|---|---|---|---|
-| **PyAnnote** (pyannote/speaker-diarization-3.1) | Speaker diarization | ~50M | ✅ | "Who spoke when" — segments audio by speaker |
+| **PyAnnote community-1** (speaker-diarization-community-1) *(new, pyannote 4.0)* | Speaker diarization | ~50M | ✅ | **Recommended** — supersedes 3.1: better speaker counting, exclusive single-speaker mode, lower DER. CC-BY-4.0, free. |
+| **PyAnnote 3.1** (speaker-diarization-3.1) `⚠ superseded` | Speaker diarization | ~50M | ✅ | "Who spoke when" — segments audio by speaker. Gated on HF. |
+| **NVIDIA Sortformer** (diar_sortformer_4spk-v1 / diar_streaming_sortformer_4spk-v2) *(new)* | Speaker diarization (end-to-end, ≤4 spk) | ~120M | ❌ (GPU) | Low-latency, streaming-capable, strong vs clustering pipelines. NeMo. |
+| **DiariZen** (BUTSpeechFIT/DiariZen) *(new)* | Speaker diarization | WavLM+Conformer | ⚠️ | Best accuracy when fine-tuned. |
 | **PyAnnote VAD** | Voice Activity Detection | ~5M | ✅ | Detects speech vs silence |
-| **SpeechBrain** (spkrec-ecapa-voxceleb) | Speaker verification/ID | ~15M | ✅ | Identify/verify speaker identity |
+| **SpeechBrain** (spkrec-ecapa-voxceleb) | Speaker verification/ID | ~15M | ✅ | Identify/verify speaker identity (dated baseline) |
 | **Silero VAD** | Voice Activity Detection | ~2M | ✅ | Lightweight VAD, 100+ languages |
 | **Wav2Vec 2.0 XLSR** | Gender classification | ~317M | ✅ | 100% accuracy on TIMIT (gender) |
 | **Wav2Vec 2.0** | Age estimation | ~317M | ✅ | ~7.1 years MAE |
@@ -94,9 +101,10 @@ For the Speechos project, a **wav analysis pipeline** should include:
 - **Why**: Best accuracy, multilingual, ~90M params, CPU capable
 - **Install**: `pip install funasr modelscope`
 
-### Speaker Diarization: PyAnnote
-- **Why**: State-of-the-art, easy API, well-maintained
-- **Install**: `pip install pyannote.audio`
+### Speaker Diarization: PyAnnote community-1 (pyannote 4.0)
+- **Why**: State-of-the-art, easy API, well-maintained; `community-1` supersedes 3.1 with better speaker counting and a free CC-BY-4.0 license
+- **Install**: `pip install -U pyannote.audio` → `Pipeline.from_pretrained("pyannote/speaker-diarization-community-1")`
+- **Real-time alternative**: NVIDIA Streaming Sortformer (`nvidia/diar_streaming_sortformer_4spk-v2`, NeMo) for low-latency ≤4-speaker diarization
 
 ### Voice Activity Detection: Silero VAD
 - **Why**: Tiny (2M params), fast, 100+ languages

@@ -1,10 +1,12 @@
 # Speech-to-Text (STT) Model Comparison Matrix
 
-> Last updated: 2026-02-27
+> Last updated: 2026-06-19
 
 ## Overview
 
 This document compares open-source speech-to-text models that can be downloaded and run locally, with and without GPU acceleration.
+
+> **2026-06 refresh (what changed since Feb 2026):** No new Whisper — `large-v3-turbo` (Oct 2024) is still the newest OpenAI model; faster-whisper/distil-whisper remain solid but are now beaten on accuracy by LLM-decoder ASR and on speed by Parakeet. New/updated open-weight models to track: **NVIDIA Parakeet TDT 0.6B v3** (25 EU languages, top throughput), **Canary-Qwen-2.5B** / **Canary-1B-v2** and **IBM Granite-Speech-4.1-2B** (accuracy leaders), **Mistral Voxtral-Mini-4B-Realtime** (open streaming ASR), and **Moonshine v2** (now multilingual + streaming, repo moved to `moonshine-ai/moonshine`). Older entries are retained and marked `⚠ superseded` where a newer drop-in exists.
 
 ---
 
@@ -23,9 +25,13 @@ This document compares open-source speech-to-text models that can be downloaded 
 | **WhisperX** | Uses Whisper weights | Same as Whisper | Same + alignment model | Same + alignment model | ✅ | ❌ | ⚠️ |
 | **Vosk (small-en)** | N/A (Kaldi) | ~40 MB | N/A | ~512 MB | ✅ | ❌ | ✅ |
 | **Vosk (large-en)** | N/A (Kaldi) | ~1.8 GB | N/A | ~4 GB | ✅ | ❌ | ✅ |
-| **Moonshine** | 27M | ~100 MB | ~512 MB | ~1 GB | ✅ | ❌ | ✅ |
-| **NVIDIA Parakeet TDT** | 1.1B | ~4 GB | ~6 GB | N/A | ❌ | ✅ | ✅ |
+| **Moonshine v2** | 27–60M | ~100 MB | ~512 MB | ~1 GB | ✅ | ❌ | ✅ |
+| **NVIDIA Parakeet TDT 1.1B** `⚠ superseded` | 1.1B | ~4 GB | ~6 GB | N/A | ❌ | ✅ | ✅ |
+| **NVIDIA Parakeet TDT 0.6B v3** *(new)* | 0.6B | ~2.5 GB | ~4 GB | N/A | ❌ | ✅ | ✅ |
 | **Canary Qwen 2.5B** | 2.5B | ~10 GB | ~12 GB | N/A | ❌ | ✅ | ❌ |
+| **Canary 1B v2** *(new, 25 langs)* | 1B | ~4 GB | ~6 GB | N/A | ❌ | ✅ | ⚠️ |
+| **IBM Granite-Speech 4.1 2B** *(new)* | 2B | ~8 GB | ~10 GB | N/A | ❌ | ✅ | ❌ |
+| **Voxtral-Mini-4B-Realtime** *(new, streaming)* | 4B | ~8 GB | ~10 GB | N/A | ❌ | ✅ | ✅ (streaming) |
 | **Wav2Vec 2.0 (base)** | 95M | ~360 MB | ~2 GB | ~4 GB | ✅ | ❌ | ✅ |
 | **Wav2Vec 2.0 (large)** | 317M | ~1.2 GB | ~4 GB | ~8 GB | ✅ | ❌ | ⚠️ |
 
@@ -45,9 +51,13 @@ This document compares open-source speech-to-text models that can be downloaded 
 | **Faster-Whisper** | 99 | ❌ | ✅ (word) | ❌ | ✅ | ✅ (VAD) | ✅ | Same as Whisper |
 | **WhisperX** | 99 | ❌ | ✅ (word) | ✅ | ✅ | ✅ | ✅ | Same as Whisper |
 | **Vosk** | 20+ | ✅ | ✅ (word) | ❌ | ⚠️ | ❌ | ❌ | ~9.8% |
-| **Moonshine** | EN | ✅ | ✅ | ❌ | ⚠️ | ❌ | ✅ | ~5–6% |
-| **NVIDIA Parakeet TDT** | EN | ✅ | ✅ (word) | ❌ | ✅ | ✅ | ✅ | ~3.0% |
-| **Canary Qwen 2.5B** | Multi | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ~5.6% |
+| **Moonshine v2** | 8 langs | ✅ | ✅ | ❌ | ⚠️ | ❌ | ✅ | ~5–6% |
+| **NVIDIA Parakeet TDT 1.1B** | EN | ✅ | ✅ (word) | ❌ | ✅ | ✅ | ✅ | ~3.0% |
+| **NVIDIA Parakeet TDT 0.6B v3** | 25 EU langs | ✅ | ✅ (word) | ❌ | ✅ | ✅ | ✅ | ~6.3% (multiling.) |
+| **Canary Qwen 2.5B** | EN (+summarize) | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ~5.6% |
+| **Canary 1B v2** | 25 langs | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ~5–6% |
+| **IBM Granite-Speech 4.1 2B** | en/fr/de/es/pt/ja | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ~5.3% |
+| **Voxtral-Mini-4B-Realtime** | Multi | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ~5–6% |
 | **Wav2Vec 2.0** | Fine-tunable | ❌ | ✅ (frame) | ❌ | ⚠️ | ❌ | ❌ | ~3–5% |
 
 ---
@@ -80,9 +90,11 @@ This document compares open-source speech-to-text models that can be downloaded 
 | Distil-Whisper | MIT | ✅ |
 | WhisperX | BSD-4-Clause | ✅ (with attribution) |
 | Vosk | Apache 2.0 | ✅ |
-| Moonshine | MIT | ✅ |
-| Parakeet TDT | Apache 2.0 (NeMo) | ✅ |
-| Canary Qwen | Apache 2.0 | ✅ |
+| Moonshine v2 | MIT | ✅ |
+| Parakeet TDT (1.1B / 0.6B v3) | CC-BY-4.0 (NeMo) | ✅ |
+| Canary (Qwen 2.5B / 1B v2) | CC-BY-4.0 | ✅ |
+| IBM Granite-Speech 4.1 | Apache 2.0 | ✅ |
+| Voxtral-Mini-4B-Realtime | Apache 2.0 | ✅ |
 | Wav2Vec 2.0 | MIT | ✅ |
 
 ---
@@ -120,4 +132,12 @@ pip install openai-whisper    # Original OpenAI implementation
 
 # For wav2vec2 models
 pip install transformers torch torchaudio
+
+# New in 2026 (open weights)
+pip install -U nemo_toolkit[asr]   # NVIDIA Parakeet TDT 0.6B v3 + Canary 1B v2 / Qwen 2.5B
+pip install transformers           # IBM Granite-Speech 4.1 (ibm-granite/granite-speech-4.1-2b)
+pip install vllm                   # Voxtral-Mini-4B-Realtime streaming ASR (Apache-2.0)
+pip install useful-moonshine       # Moonshine v2 (repo moonshine-ai/moonshine)
 ```
+
+> **Model IDs (2026):** Parakeet `nvidia/parakeet-tdt-0.6b-v3` · Canary `nvidia/canary-qwen-2.5b`, `nvidia/canary-1b-v2` · Granite `ibm-granite/granite-speech-4.1-2b` · Voxtral `mistralai/Voxtral-Mini-4B-Realtime-2602`. **Open ASR Leaderboard** top open-weight tier is now Canary-Qwen-2.5B / Granite-Speech; Parakeet is the throughput leader. Whisper remains the multilingual workhorse (no new version).

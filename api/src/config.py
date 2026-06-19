@@ -320,7 +320,7 @@ def _apply_yaml_overrides(cfg: AppConfig, yaml_cfg: dict[str, Any]) -> None:
         cfg.max_upload_mb = st.get("max_upload_mb", cfg.max_upload_mb)
     if "model_loading" in yaml_cfg:
         cfg.model_loading = yaml_cfg["model_loading"]
-    for key in ("stt", "tts", "tts_fast", "tts_expressive", "emotion", "diarization", "vad"):
+    for key in ("stt", "tts", "tts_fast", "tts_expressive", "tts_clone", "emotion", "diarization", "vad"):
         if key in yaml_cfg and yaml_cfg[key] is not None:
             setattr(cfg, key, _dict_to_model_config(yaml_cfg[key]))
 

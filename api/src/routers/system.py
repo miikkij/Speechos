@@ -30,12 +30,16 @@ MODEL_OPTIONS = {
         # Vosk — lightweight CPU-only Kaldi
         {"engine": "vosk", "model": "vosk-model-small-en-us-0.15", "label": "Vosk Small EN (40MB, CPU, real-time)"},
         {"engine": "vosk", "model": "vosk-model-en-us-0.22", "label": "Vosk Large EN (1.8GB, better accuracy)"},
-        # Moonshine — ultra-lightweight
-        {"engine": "moonshine", "model": "moonshine/tiny", "label": "Moonshine Tiny (27M, ultra-fast)"},
-        {"engine": "moonshine", "model": "moonshine/base", "label": "Moonshine Base"},
+        # Moonshine v2 — ultra-lightweight, now multilingual + streaming
+        {"engine": "moonshine", "model": "moonshine/tiny", "label": "Moonshine v2 Tiny (27M, ultra-fast)"},
+        {"engine": "moonshine", "model": "moonshine/base", "label": "Moonshine v2 Base (multilingual)"},
         # NVIDIA NeMo — GPU-only
+        {"engine": "nemo", "model": "nvidia/parakeet-tdt-0.6b-v3", "label": "NVIDIA Parakeet TDT 0.6B v3 (GPU, 25 EU langs, fastest)"},
         {"engine": "nemo", "model": "nvidia/parakeet-tdt-1.1b", "label": "NVIDIA Parakeet TDT 1.1B (GPU only)"},
-        {"engine": "nemo", "model": "nvidia/canary-qwen-2.5b", "label": "Canary Qwen 2.5B (GPU only, multilingual)"},
+        {"engine": "nemo", "model": "nvidia/canary-qwen-2.5b", "label": "Canary Qwen 2.5B (GPU only, top accuracy)"},
+        {"engine": "nemo", "model": "nvidia/canary-1b-v2", "label": "Canary 1B v2 (GPU, 25 languages)"},
+        # IBM Granite Speech — accuracy leader via transformers
+        {"engine": "granite-speech", "model": "ibm-granite/granite-speech-4.1-2b", "label": "IBM Granite-Speech 4.1 2B (GPU, high accuracy)"},
         # Wav2Vec 2.0 — via transformers
         {"engine": "wav2vec2-stt", "model": "facebook/wav2vec2-base-960h", "label": "Wav2Vec 2.0 Base (95M)"},
         {"engine": "wav2vec2-stt", "model": "facebook/wav2vec2-large-960h", "label": "Wav2Vec 2.0 Large (317M)"},
@@ -52,16 +56,20 @@ MODEL_OPTIONS = {
         {"engine": "piper", "model": "en_GB-alan-medium", "label": "Piper: Alan British Medium"},
         # Kokoro — #1 TTS Arena, 82M params
         {"engine": "kokoro", "model": "default", "label": "Kokoro 82M (best quality/size, CPU+GPU)"},
-        # Chatterbox — best voice cloning, MIT
-        {"engine": "chatterbox", "model": "default", "label": "Chatterbox (best voice cloning, MIT)"},
+        # Kitten TTS — 15M ultra-tiny CPU model (new 2026)
+        {"engine": "kitten", "model": "KittenML/kitten-tts-nano-0.8-fp32", "label": "Kitten TTS nano (15M, CPU, tiny)"},
+        # Chatterbox — best voice cloning, MIT (Multilingual V3 in 2026)
+        {"engine": "chatterbox", "model": "default", "label": "Chatterbox Multilingual V3 (voice cloning, 23+ langs, MIT)"},
         # Bark — versatile with effects
         {"engine": "bark", "model": "suno/bark", "label": "Bark (music/effects, slow, GPU rec.)"},
         {"engine": "bark", "model": "suno/bark-small", "label": "Bark Small (faster, less quality)"},
         # eSpeak-NG — rule-based, instant
         {"engine": "espeak", "model": "en", "label": "eSpeak-NG (robotic, instant, 100+ langs)"},
         # ── Docker engines (run in WSL2 containers) ─────────
-        # Qwen3-TTS — SOTA quality, emotion control
-        {"engine": "qwen3-tts", "model": "Qwen3-TTS-0.6B", "label": "[Docker] Qwen3-TTS 0.6B (SOTA, emotion control)"},
+        # VibeVoice — long-form, multi-speaker podcast TTS (new 2026)
+        {"engine": "vibevoice", "model": "vibevoice/VibeVoice-1.5B", "label": "[Docker] VibeVoice 1.5B (long-form, multi-speaker)"},
+        # Qwen3-TTS — SOTA quality, emotion control (confirmed open weights, Apache-2.0)
+        {"engine": "qwen3-tts", "model": "Qwen3-TTS-0.6B", "label": "[Docker] Qwen3-TTS 0.6B (open weights, emotion control)"},
         # XTTS-v2 — Coqui TTS, 17 languages, voice cloning
         {"engine": "xtts", "model": "xtts_v2", "label": "[Docker] XTTS-v2 (17 langs, voice cloning)"},
         # ChatTTS — dialog-optimized, prosody control
@@ -70,8 +78,12 @@ MODEL_OPTIONS = {
         {"engine": "melotts", "model": "EN", "label": "[Docker] MeloTTS (multilingual, fast)"},
         # Orpheus 3B — emotional speech
         {"engine": "orpheus", "model": "orpheus-3b", "label": "[Docker] Orpheus 3B (emotional speech)"},
+        # OpenAudio S1-mini — succeeds Fish Speech 1.5 (NON-COMMERCIAL license)
+        {"engine": "fish-speech", "model": "fishaudio/openaudio-s1-mini", "label": "[Docker] OpenAudio S1-mini (voice cloning, NC license)"},
         # Fish Speech 1.5 — real-time, voice cloning
         {"engine": "fish-speech", "model": "fish-speech-1.5", "label": "[Docker] Fish Speech 1.5 (voice cloning)"},
+        # CosyVoice 3 — zero-shot cloning, streaming (2025-12, supersedes CosyVoice2)
+        {"engine": "cosyvoice", "model": "FunAudioLLM/Fun-CosyVoice3-0.5B-2512", "label": "[Docker] CosyVoice 3 (zero-shot cloning, 2026)"},
         # CosyVoice 2 — zero-shot cloning, streaming
         {"engine": "cosyvoice", "model": "cosyvoice-300m", "label": "[Docker] CosyVoice 2 (zero-shot cloning)"},
         # Parler-TTS — description-driven voice control
@@ -94,8 +106,13 @@ MODEL_OPTIONS = {
         {"engine": "none", "model": "none", "label": "Disabled"},
     ],
     "diarization": [
-        # PyAnnote — state-of-the-art (requires HuggingFace gated access)
-        {"engine": "pyannote", "model": "pyannote/speaker-diarization-3.1", "label": "PyAnnote 3.1 (best accuracy, gated model)"},
+        # PyAnnote 4.0 community-1 — supersedes 3.1, free CC-BY-4.0 (new 2026)
+        {"engine": "pyannote", "model": "pyannote/speaker-diarization-community-1", "label": "PyAnnote community-1 (4.0, best accuracy, free)"},
+        # PyAnnote 3.1 — previous SOTA (requires HuggingFace gated access)
+        {"engine": "pyannote", "model": "pyannote/speaker-diarization-3.1", "label": "PyAnnote 3.1 (gated model)"},
+        # NVIDIA Sortformer — end-to-end streaming diarization (new 2026, GPU)
+        {"engine": "sortformer", "model": "nvidia/diar_streaming_sortformer_4spk-v2", "label": "NVIDIA Streaming Sortformer v2 (GPU, real-time, ≤4 spk)"},
+        {"engine": "sortformer", "model": "nvidia/diar_sortformer_4spk-v1", "label": "NVIDIA Sortformer v1 (GPU, offline, ≤4 spk)"},
         # SpeechBrain — speaker verification/ID
         {"engine": "speechbrain", "model": "spkrec-ecapa-voxceleb", "label": "SpeechBrain ECAPA (speaker verification)"},
         # Resemblyzer — lightweight d-vector embeddings
@@ -155,8 +172,12 @@ def _check_engine_installed(engine: str) -> bool:
             import whisperx  # noqa: F401
         elif engine == "moonshine":
             import moonshine  # noqa: F401
-        elif engine in ("wav2vec2-stt", "wav2vec2-ser", "hubert-ser", "wavlm-ser", "wav2small"):
+        elif engine in ("wav2vec2-stt", "wav2vec2-ser", "hubert-ser", "wavlm-ser", "wav2small", "granite-speech"):
             import transformers  # noqa: F401
+        elif engine == "kitten":
+            import kittentts  # noqa: F401
+        elif engine == "sortformer":
+            import nemo.collections.asr  # noqa: F401
         elif engine == "emotion2vec":
             import funasr  # noqa: F401
         elif engine == "pyannote":
@@ -181,7 +202,7 @@ def _check_engine_installed(engine: str) -> bool:
             pass  # system binary, assume available
         elif engine == "none":
             pass
-        elif engine in ("xtts", "chattts", "melotts", "orpheus", "fish-speech", "cosyvoice", "parler", "qwen3-tts"):
+        elif engine in ("xtts", "chattts", "melotts", "orpheus", "fish-speech", "cosyvoice", "parler", "qwen3-tts", "vibevoice"):
             pass  # Docker engines, always "available" as options
         else:
             return False
@@ -252,10 +273,15 @@ async def switch_model(req: SwitchModelRequest):
     # Determine device
     device = "cpu"
     compute_type = "int8"
+    # Native TTS engines that benefit from / require a GPU (Docker engines manage
+    # their own device, and piper/kitten/espeak stay on CPU).
+    GPU_CAPABLE_TTS = {"chatterbox", "kokoro", "bark", "orpheus"}
     if config.hardware.gpu_available:
         if req.category in ("stt", "emotion", "diarization"):
             device = "cuda"
             compute_type = "float16"
+        elif req.category == "tts" and req.engine in GPU_CAPABLE_TTS:
+            device = "cuda"
 
     new_cfg = ModelConfig(
         engine=req.engine,
