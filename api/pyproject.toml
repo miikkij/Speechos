@@ -52,6 +52,30 @@ bench = [
     "librosa>=0.10.0",
 ]
 
+# Qwen3-ASR (transformers backend). qwen-asr pins transformers==4.57.6 (= core lock) and pulls
+# gradio, which lifts starlette to 1.x inside this extra only.
+bench-qwen = [
+    "qwen-asr>=0.0.6",
+]
+
+# Finnish TTS bench: edge-tts (cloud reference voices) + UTMOSv2 naturalness predictor (git, pinned).
+bench-tts = [
+    "edge-tts>=7.2.0",
+    "utmosv2",  # git source pinned in [tool.uv.sources] (not on PyPI)
+]
+# Runtime deps of the Chatterbox code bundled in Finnish-NLP/Chatterbox-Finnish (src/engines_fi).
+# The PyPI chatterbox-tts package pins torch==2.6 / transformers==5.2 and cannot share this lock.
+# diffusers<0.31: the bundled S3Gen decoder imports diffusers.models.lora.LoRACompatibleLinear.
+tts-fi = [
+    "resemble-perth>=1.0.1",
+    "s3tokenizer>=0.3.0",
+    "conformer==0.3.2",
+    "diffusers>=0.29.0,<0.31",
+    "omegaconf>=2.3",
+    "einops>=0.6",
+    "safetensors>=0.4",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -64,6 +88,8 @@ torchaudio = { index = "pytorch-cu128" }
 # torchcodec only decodes dataset audio for the bench; the CPU build avoids the
 # CUDA-13 / NPP runtime deps the default PyPI wheel pulls against a cu128 torch.
 torchcodec = { index = "pytorch-cpu" }
+# bench-tts only: UTMOSv2 is not on PyPI.
+utmosv2 = { git = "https://github.com/sarulab-speech/UTMOSv2", rev = "cc2700db57bb83ee13dc31ebe1b868c254e15d09" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
