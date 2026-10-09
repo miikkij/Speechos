@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import os
 from dataclasses import dataclass, field, replace
 from enum import Enum
@@ -11,6 +12,8 @@ from typing import Any
 
 import psutil
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 class ComputeMode(Enum):
@@ -214,12 +217,15 @@ def detect_hardware(mode_override: str | None = None, tier_override: str | None 
 
     try:
         import torch
-        if torch.cuda.is_available():
-            gpu_available = True
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
             gpu_name = torch.cuda.get_device_name(0)
             vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            gpu_available = True
     except ImportError:
         pass
+    except Exception as e:  # broken driver, CUDA_VISIBLE_DEVICES="" with a stale context, ...
+        logger.warning("CUDA reported available but could not be queried (%s); using CPU", e)
+        gpu_name, vram_gb = None, 0.0
 
     mode_override = os.environ.get("SPEECHOS_COMPUTE_MODE") or mode_override
     if mode_override and mode_override != "auto":

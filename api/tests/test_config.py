@@ -33,6 +33,7 @@ def fake_hw(monkeypatch: pytest.MonkeyPatch, ram_gb: float, vram_gb: float | Non
     )
     cuda = types.SimpleNamespace(
         is_available=lambda: vram_gb is not None,
+        device_count=lambda: 1 if vram_gb is not None else 0,
         get_device_name=lambda i: "Fake RTX",
         get_device_properties=lambda i: types.SimpleNamespace(total_memory=int((vram_gb or 0) * GB)),
     )
@@ -68,6 +69,19 @@ def test_no_torch_means_cpu(monkeypatch):
     hw = detect_hardware()
     assert hw.tier == "cpu-16gb"
     assert hw.gpu_available is False
+
+
+def test_broken_cuda_falls_back_to_cpu(monkeypatch):
+    """e.g. CUDA_VISIBLE_DEVICES="" — is_available() is True but device 0 is invalid."""
+    fake_hw(monkeypatch, 16, 24)
+
+    def invalid(i):
+        raise AssertionError("Invalid device id")
+
+    monkeypatch.setattr(sys.modules["torch"].cuda, "get_device_name", invalid)
+    hw = detect_hardware()
+    assert hw.gpu_available is False
+    assert hw.tier == "cpu-16gb"
 
 
 def test_compute_mode_env_forces_cpu_on_gpu_machine(monkeypatch):
