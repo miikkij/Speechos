@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Panel } from "@/components/ui";
 import { getModelOptions, getSystemInfo, switchModel, type ModelOptionsResponse, type SystemInfo } from "@/lib/api";
+import { modelDisplayName } from "@/lib/format";
 
 const CATEGORIES: { key: string; title: string; desc: string }[] = [
     { key: "stt", title: "Speech to text", desc: "Turns speech into a transcript with timestamps." },
@@ -32,6 +33,8 @@ function CategoryCard({
     const [error, setError] = useState<string | null>(null);
     const options = data.options[category] ?? [];
     const cur = data.current[category];
+    const finnishCfg = data.current.stt_fi;
+    const finnish = finnishCfg && finnishCfg.engine !== "none" ? finnishCfg : null;
     const isActive = (engine: string, model: string) => cur?.engine === engine && cur?.model === model;
 
     // Active first, then installed, then the rest
@@ -62,6 +65,12 @@ function CategoryCard({
                 <h2 className="m-0 text-base font-semibold">{title}</h2>
                 <span className="text-[13px] text-muted">{desc}</span>
             </div>
+            {category === "stt" && finnish && (
+                <p className="m-0 rounded-[10px] border border-selected-line bg-selected px-3 py-2.5 text-[13px]">
+                    Finnish requests use <span className="font-medium">{modelDisplayName(finnish.model)}</span>: 6.2 % WER vs
+                    7.5 % for large-v3 on FLEURS-fi, same speed. Other languages use the model chosen below.
+                </p>
+            )}
             <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0" disabled={busy}>
                 <legend className="sr-only">{title}</legend>
                 {visible.map((o) => {

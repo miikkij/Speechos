@@ -45,13 +45,15 @@ class HardwareProfile:
     tier: str
 
 
-MODEL_SLOTS = ("stt", "tts", "tts_fast", "tts_expressive", "tts_clone", "emotion", "diarization", "vad")
+MODEL_SLOTS = ("stt", "stt_fi", "tts", "tts_fast", "tts_expressive", "tts_clone", "emotion", "diarization", "vad")
 
 
 @dataclass
 class AppConfig:
     hardware: HardwareProfile
     stt: ModelConfig | None = None
+    # Finnish-only STT used when a request says language=fi (see _auto_finnish_stt)
+    stt_fi: ModelConfig | None = None
     tts: ModelConfig | None = None
     tts_fast: ModelConfig | None = None
     tts_expressive: ModelConfig | None = None
@@ -345,6 +347,9 @@ def load_config(config_path: str | None = None) -> AppConfig:
 
     _apply_yaml_overrides(cfg, yaml_cfg)
     _apply_env_overrides(cfg)
+    explicit_fi = "stt_fi" in yaml_cfg or any(k.startswith("SPEECHOS_STT_FI_") for k in os.environ)
+    if not explicit_fi:
+        _auto_finnish_stt(cfg)
 
     # Ensure directories exist
     Path(cfg.model_dir).mkdir(parents=True, exist_ok=True)
@@ -352,6 +357,33 @@ def load_config(config_path: str | None = None) -> AppConfig:
     Path(cfg.samples_dir).mkdir(parents=True, exist_ok=True)
 
     return cfg
+
+
+# Finnish-NLP/whisper-large-finnish-v3 converted to CTranslate2 float16 (see api/bench/README.md).
+# FLEURS-fi n=300: WER 6.2 % vs 7.5 % for large-v3 at the same speed; Finnish only.
+FINNISH_WHISPER_DIR = "whisper-large-finnish-v3-ct2-f16"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def finnish_whisper_candidates(model_dir: str) -> list[Path]:
+    return [
+        Path(model_dir) / "whisper-ct2" / FINNISH_WHISPER_DIR,
+        _REPO_ROOT / "models" / "whisper-ct2" / FINNISH_WHISPER_DIR,
+    ]
+
+
+def _auto_finnish_stt(cfg: AppConfig) -> None:
+    """Use the Finnish Whisper for language=fi on tiers that already run large-v3 on the GPU,
+    when the converted model is on disk. Other languages keep using ``stt``."""
+    stt = cfg.stt
+    if stt is None or stt.engine != "faster-whisper" or stt.device != "cuda" or stt.model != "large-v3":
+        return
+    for path in finnish_whisper_candidates(cfg.model_dir):
+        if (path / "model.bin").is_file():
+            cfg.stt_fi = ModelConfig(
+                engine="faster-whisper", model=str(path), device="cuda", compute_type=stt.compute_type
+            )
+            return
 
 
 def _apply_yaml_overrides(cfg: AppConfig, yaml_cfg: dict[str, Any]) -> None:

@@ -12,7 +12,7 @@ import { Waveform } from "@/components/Waveform";
 import { useAudioElement } from "@/hooks/useAudioElement";
 import { usePeaks } from "@/hooks/usePeaks";
 import { deleteRecording, getModelOptions, getRecordings, type Recording } from "@/lib/api";
-import { assignSpeakers, baseName, downloadText, formatTime, speakerPalette, toPlainText, toSrt } from "@/lib/format";
+import { assignSpeakers, baseName, downloadText, formatTime, modelDisplayName, speakerPalette, toPlainText, toSrt } from "@/lib/format";
 import { useApp } from "@/lib/store";
 
 const BUCKETS = 140;
@@ -80,11 +80,14 @@ function AnalyzeWorkspace() {
             .then((data) => {
                 const label = (cat: string) => {
                     const cur = data.current[cat];
-                    if (!cur) return null;
+                    if (!cur || cur.engine === "none") return null;
+                    if (cat === "stt_fi") return `Finnish: ${modelDisplayName(cur.model)}`;
                     const opt = data.options[cat]?.find((o) => o.engine === cur.engine && o.model === cur.model);
                     return opt ? opt.label.split(" (")[0] : `${cur.engine} ${cur.model}`;
                 };
-                setModelsLine(["stt", "emotion", "diarization"].map(label).filter(Boolean).join(" · ") || null);
+                setModelsLine(
+                    ["stt", "stt_fi", "emotion", "diarization"].map(label).filter(Boolean).join(" · ") || null,
+                );
             })
             .catch(() => setModelsLine(null));
         // Re-read after each analysis: the API may switch a model (e.g. gated pyannote → Resemblyzer)

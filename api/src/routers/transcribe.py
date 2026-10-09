@@ -43,7 +43,9 @@ async def transcribe(
 
     t0 = time.perf_counter()
     try:
-        result = await get_models().run("stt", lambda stt, cfg: transcribe_array(stt, cfg, audio, lang))
+        result = await get_models().run(
+            "stt", lambda stt, cfg: transcribe_array(stt, cfg, audio, lang), language=lang
+        )
     except ModelNotConfiguredError as e:
         raise HTTPException(503, str(e)) from e
     except (ImportError, FileNotFoundError, OSError) as e:

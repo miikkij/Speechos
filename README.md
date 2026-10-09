@@ -78,6 +78,20 @@ Speechos ships a Finnish benchmark (`api/bench/`) that drives its defaults. Resu
 | Chatterbox-Finnish + Finnish reference voice | 3.29 % ± 0.26 | 1.28 | Most natural local voice, too slow for live use |
 | eSpeak-NG Finnish | 9.94 % | 0.02 | Robotic fallback |
 
+**Finnish Whisper.** On GPU tiers that run large-v3, requests with `language=fi` use whisper-large-finnish-v3
+automatically once its CTranslate2 conversion is on disk; other languages keep large-v3. One-time setup (3.1 GB):
+
+```bash
+cd api   # the API environment already has transformers, torch and ctranslate2
+uv run hf download Finnish-NLP/whisper-large-finnish-v3 \
+  --revision b23deb0b3855c829ffe04cb1c6709757ff16d49c --local-dir ../models/whisper-large-finnish-v3
+uv run ct2-transformers-converter --model ../models/whisper-large-finnish-v3 \
+  --output_dir ../models/whisper-ct2/whisper-large-finnish-v3-ct2-f16 \
+  --quantization float16 --copy_files tokenizer.json preprocessor_config.json
+```
+
+Turn it off with `SPEECHOS_STT_FI_ENGINE=none`, or point `stt_fi` in `config.yaml` at another model.
+
 Full method, all engines and how to reproduce: [api/bench/README.md](api/bench/README.md).
 
 ```bash

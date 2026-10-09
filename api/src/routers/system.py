@@ -232,7 +232,7 @@ async def model_options():
 
     # Return current selection alongside options
     current = {}
-    for key in ("stt", "tts", "emotion", "diarization", "vad"):
+    for key in ("stt", "stt_fi", "tts", "emotion", "diarization", "vad"):
         mc = getattr(config, key, None)
         if mc:
             current[key] = {"engine": mc.engine, "model": mc.model}

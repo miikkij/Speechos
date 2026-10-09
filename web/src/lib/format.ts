@@ -102,6 +102,12 @@ export async function wavSampleRate(blob: Blob): Promise<number | null> {
     return view.getUint32(24, true);
 }
 
+/** A local model path → its readable name: ".../whisper-large-finnish-v3-ct2-f16" → "whisper-large-finnish-v3" */
+export function modelDisplayName(model: string): string {
+    const last = model.split(/[\\/]/).filter(Boolean).pop() ?? model;
+    return last.replace(/-ct2(-[a-z0-9]+)?$/i, "");
+}
+
 /** "recording_2026-10-08.wav" → "recording_2026-10-08" */
 export function baseName(name: string): string {
     return name.replace(/\.[a-z0-9]+$/i, "");

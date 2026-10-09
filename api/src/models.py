@@ -57,8 +57,11 @@ class ModelManager:
 
         For TTS slots this picks a per-language variant: a Finnish request on an
         English Piper voice loads the Finnish voice under its own cache key.
+        For STT, a Finnish request uses ``stt_fi`` when one is configured.
         Raises ModelNotConfiguredError / UnsupportedLanguageError.
         """
+        if category == "stt" and self.config.stt_fi is not None and base_language(language) == "fi":
+            return "stt_fi", self.config.stt_fi
         cfg: ModelConfig | None = getattr(self.config, category, None)
         if cfg is None:
             raise ModelNotConfiguredError(f"No model configured for '{category}'")
@@ -129,7 +132,7 @@ class ModelManager:
         return await asyncio.to_thread(self.run_sync, key, cfg, fn)
 
     def _loader_for(self, category: str) -> Callable[[ModelConfig], Any]:
-        if category == "stt":
+        if category in ("stt", "stt_fi"):
             return self._load_stt
         if category in TTS_SLOTS:
             return self._load_tts
