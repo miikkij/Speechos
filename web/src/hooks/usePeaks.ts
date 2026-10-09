@@ -6,18 +6,15 @@ export interface Peaks {
     /** Normalized 0–1 amplitude per bucket. */
     values: number[];
     duration: number;
-    sampleRate: number;
 }
 
 /** Decode an audio blob in the browser and reduce it to `buckets` peak values for a waveform. */
 export function usePeaks(blob: Blob | null, buckets: number): Peaks | null {
-    const [peaks, setPeaks] = useState<Peaks | null>(null);
+    // Keyed by the blob it was computed from, so a new blob never shows stale peaks
+    const [state, setState] = useState<{ blob: Blob; peaks: Peaks } | null>(null);
 
     useEffect(() => {
-        if (!blob) {
-            setPeaks(null);
-            return;
-        }
+        if (!blob) return;
         let cancelled = false;
         const ctx = new AudioContext();
         blob
@@ -39,15 +36,12 @@ export function usePeaks(blob: Blob | null, buckets: number): Peaks | null {
                     values.push(peak);
                     if (peak > max) max = peak;
                 }
-                setPeaks({
-                    values: values.map((v) => (max > 0 ? v / max : 0)),
-                    duration: audio.duration,
-                    sampleRate: audio.sampleRate,
+                setState({
+                    blob,
+                    peaks: { values: values.map((v) => (max > 0 ? v / max : 0)), duration: audio.duration },
                 });
             })
-            .catch(() => {
-                if (!cancelled) setPeaks(null);
-            })
+            .catch(() => undefined)
             .finally(() => {
                 ctx.close().catch(() => undefined);
             });
@@ -56,5 +50,5 @@ export function usePeaks(blob: Blob | null, buckets: number): Peaks | null {
         };
     }, [blob, buckets]);
 
-    return peaks;
+    return blob && state?.blob === blob ? state.peaks : null;
 }

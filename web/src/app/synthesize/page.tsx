@@ -16,7 +16,7 @@ const MAX_CHARS = 10000;
 const LANGUAGE_NAMES: Record<string, string> = { fi: "Finnish", en: "English", auto: "All" };
 
 function ClipRow({ text, voice, blob }: { text: string; voice: string; blob: Blob }) {
-    const audio = useAudioElement(blob);
+    const { attach: attachAudio, ...audio } = useAudioElement(blob);
     return (
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5 py-2.5">
             <button
@@ -29,7 +29,7 @@ function ClipRow({ text, voice, blob }: { text: string; voice: string; blob: Blo
             </button>
             <span className="min-w-0 flex-[1_1_240px] truncate">{text}</span>
             <span className="text-xs text-muted">{voice}</span>
-            <audio ref={audio.ref} src={audio.src} {...audio.bind} />
+            <audio ref={attachAudio} src={audio.src} {...audio.bind} />
         </div>
     );
 }
@@ -47,7 +47,7 @@ export default function SynthesizePage() {
     const [result, setResult] = useState<{ blob: Blob; voice: string; seconds: number; sampleRate: number | null } | null>(null);
 
     const peaks = usePeaks(result?.blob ?? null, 90);
-    const audio = useAudioElement(result?.blob ?? null);
+    const { attach: attachAudio, ...audio } = useAudioElement(result?.blob ?? null);
     const downloadUrl = audio.src;
 
     useEffect(() => {
@@ -189,7 +189,7 @@ export default function SynthesizePage() {
                                     Download WAV
                                 </a>
                             )}
-                            <audio ref={audio.ref} src={audio.src} {...audio.bind} />
+                            <audio ref={attachAudio} src={audio.src} {...audio.bind} />
                         </div>
                         <p className="m-0 text-xs text-faint">
                             {result.voice} · generated in {result.seconds.toFixed(1)} s

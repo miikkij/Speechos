@@ -21,13 +21,16 @@ export interface UseRecorderReturn {
     duration: number;
     start: () => Promise<void>;
     stop: () => Promise<Blob>;
-    audioLevel: number;
+    /** Rolling input-level history (0–1), newest last; all zeros when idle. */
+    levels: number[];
 }
+
+const LEVEL_HISTORY = 48;
 
 export function useRecorder(deviceId?: string, settings?: AudioSettings): UseRecorderReturn {
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
-    const [audioLevel, setAudioLevel] = useState(0);
+    const [levels, setLevels] = useState<number[]>(() => Array<number>(LEVEL_HISTORY).fill(0));
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
@@ -73,10 +76,12 @@ export function useRecorder(deviceId?: string, settings?: AudioSettings): UseRec
         gainNode.connect(dest);
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let history = Array<number>(LEVEL_HISTORY).fill(0);
         const updateLevel = () => {
             analyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-            setAudioLevel(avg / 255);
+            history = [...history.slice(1), avg / 255];
+            setLevels(history);
             animFrameRef.current = requestAnimationFrame(updateLevel);
         };
         updateLevel();
@@ -97,7 +102,7 @@ export function useRecorder(deviceId?: string, settings?: AudioSettings): UseRec
             stream.getTracks().forEach((t) => t.stop());
             audioCtx.close();
             cancelAnimationFrame(animFrameRef.current);
-            setAudioLevel(0);
+            setLevels(Array<number>(LEVEL_HISTORY).fill(0));
 
             const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
             resolveStopRef.current?.(blob);
@@ -123,5 +128,5 @@ export function useRecorder(deviceId?: string, settings?: AudioSettings): UseRec
         });
     }, []);
 
-    return { isRecording, duration, start, stop, audioLevel };
+    return { isRecording, duration, start, stop, levels };
 }

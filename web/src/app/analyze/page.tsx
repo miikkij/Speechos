@@ -53,26 +53,24 @@ function AnalyzeWorkspace() {
     const router = useRouter();
     const recordingId = params.get("r");
     const { results, runAnalysis, bumpRecordings } = useApp();
-    const [recording, setRecording] = useState<Recording | null>(null);
+    const [loaded, setLoaded] = useState<{ id: string; recording: Recording | null } | null>(null);
+    const recording = loaded && loaded.id === recordingId ? loaded.recording : null;
     const [modelsLine, setModelsLine] = useState<string | null>(null);
 
     const result = recordingId ? results[recordingId] : undefined;
     const blob = result?.blob ?? null;
     const peaks = usePeaks(blob, BUCKETS);
-    const audio = useAudioElement(blob);
+    const { attach: attachAudio, ...audio } = useAudioElement(blob);
 
     useEffect(() => {
         if (recordingId) runAnalysis(recordingId);
     }, [recordingId, runAnalysis]);
 
     useEffect(() => {
-        if (!recordingId) {
-            setRecording(null);
-            return;
-        }
+        if (!recordingId) return;
         getRecordings()
-            .then((recs) => setRecording(recs.find((r) => r.id === recordingId) ?? null))
-            .catch(() => setRecording(null));
+            .then((recs) => setLoaded({ id: recordingId, recording: recs.find((r) => r.id === recordingId) ?? null }))
+            .catch(() => setLoaded({ id: recordingId, recording: null }));
     }, [recordingId]);
 
     useEffect(() => {
@@ -131,14 +129,14 @@ function AnalyzeWorkspace() {
         });
     }
 
-    const speechMask = useMemo(() => {
-        const segs = analysis?.speech?.segments;
-        if (!segs?.length || !duration) return undefined;
-        return Array.from({ length: BUCKETS }, (_, i) => {
-            const t = ((i + 0.5) / BUCKETS) * duration;
-            return segs.some((s) => t >= s.start - 0.15 && t <= s.end + 0.15);
-        });
-    }, [analysis, duration]);
+    const speechSegments = analysis?.speech?.segments;
+    const speechMask =
+        speechSegments?.length && duration
+            ? Array.from({ length: BUCKETS }, (_, i) => {
+                  const t = ((i + 0.5) / BUCKETS) * duration;
+                  return speechSegments.some((s) => t >= s.start - 0.15 && t <= s.end + 0.15);
+              })
+            : undefined;
 
     const name = recording?.filename || recordingId || "";
     const meta = [
@@ -263,7 +261,7 @@ function AnalyzeWorkspace() {
                                         ))}
                                     </select>
                                 </label>
-                                <audio ref={audio.ref} src={audio.src} preload="metadata" {...audio.bind} />
+                                <audio ref={attachAudio} src={audio.src} preload="metadata" {...audio.bind} />
                             </div>
 
                             <div className="flex flex-col gap-2">

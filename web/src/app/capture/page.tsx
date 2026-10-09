@@ -12,14 +12,11 @@ import { getRecordings, uploadRecording, type Recording } from "@/lib/api";
 import { formatDate, formatTime } from "@/lib/format";
 import { useApp } from "@/lib/store";
 
-const METER_BARS = 48;
-
 export default function CapturePage() {
     const router = useRouter();
     const { language, setLanguage, options, setOptions, bumpRecordings, recordingsVersion, results } = useApp();
     const { devices, selectedId, setSelectedId } = useAudioDevices();
-    const { isRecording, duration, start, stop, audioLevel } = useRecorder(selectedId || undefined);
-    const [levels, setLevels] = useState<number[]>(() => Array(METER_BARS).fill(0));
+    const { isRecording, duration, start, stop, levels } = useRecorder(selectedId || undefined);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dragging, setDragging] = useState(false);
@@ -31,15 +28,6 @@ export default function CapturePage() {
             .then((recs) => setRecent([...recs].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3)))
             .catch(() => setRecent([]));
     }, [recordingsVersion]);
-
-    // Rolling input-level history for the meter
-    useEffect(() => {
-        if (!isRecording) {
-            setLevels(Array(METER_BARS).fill(0));
-            return;
-        }
-        setLevels((prev) => [...prev.slice(1), audioLevel]);
-    }, [audioLevel, isRecording]);
 
     const save = useCallback(
         async (blob: Blob) => {

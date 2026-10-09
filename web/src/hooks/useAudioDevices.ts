@@ -18,32 +18,37 @@ export function useAudioDevices(): UseAudioDevicesReturn {
     const [devices, setDevices] = useState<AudioDevice[]>([]);
     const [selectedId, setSelectedId] = useState("");
 
-    const refresh = useCallback(async () => {
-        try {
+    const refresh = useCallback(
+        (): Promise<void> =>
             // Request permission first — enumerateDevices only returns labels
             // after the user has granted mic access at least once
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach((t) => t.stop());
+            navigator.mediaDevices
+                .getUserMedia({ audio: true })
+                .then((stream) => {
+                    stream.getTracks().forEach((t) => t.stop());
+                    return navigator.mediaDevices.enumerateDevices();
+                })
+                .then((all) => {
+                    const mics = all
+                        .filter((d) => d.kind === "audioinput")
+                        .map((d, i) => ({
+                            deviceId: d.deviceId,
+                            label: d.label || `Microphone ${i + 1}`,
+                        }));
+                    setDevices(mics);
 
-            const all = await navigator.mediaDevices.enumerateDevices();
-            const mics = all
-                .filter((d) => d.kind === "audioinput")
-                .map((d, i) => ({
-                    deviceId: d.deviceId,
-                    label: d.label || `Microphone ${i + 1}`,
-                }));
-            setDevices(mics);
-
-            // Keep current selection if still valid, otherwise pick first
-            setSelectedId((prev) => {
-                if (prev && mics.some((m) => m.deviceId === prev)) return prev;
-                return mics[0]?.deviceId ?? "";
-            });
-        } catch {
-            // Permission denied or no devices
-            setDevices([]);
-        }
-    }, []);
+                    // Keep current selection if still valid, otherwise pick first
+                    setSelectedId((prev) => {
+                        if (prev && mics.some((m) => m.deviceId === prev)) return prev;
+                        return mics[0]?.deviceId ?? "";
+                    });
+                })
+                .catch(() => {
+                    // Permission denied or no devices
+                    setDevices([]);
+                }),
+        [],
+    );
 
     useEffect(() => {
         refresh();
