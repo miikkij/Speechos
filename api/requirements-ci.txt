@@ -1,0 +1,19 @@
+# Light test environment for CI: everything the unit tests import, nothing
+# that pulls CUDA torch or model runtimes. Versions match api/uv.lock.
+# Used by .github/workflows/ci.yml (uv pip install -r requirements-ci.txt).
+fastapi==0.133.1
+starlette==0.52.1
+pydantic==2.12.5
+uvicorn==0.41.0
+python-multipart==0.0.22
+pyyaml==6.0.3
+psutil==7.2.2
+aiofiles==25.1.0
+httpx==0.28.1
+numpy==2.4.2
+soundfile==0.13.1
+librosa==0.11.0
+av==16.1.0
+pytest==9.0.2
+pytest-asyncio==1.3.0
+ruff==0.16.10
