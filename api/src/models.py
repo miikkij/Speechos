@@ -80,6 +80,8 @@ class ModelManager:
             code = kokoro_lang_code(language)
             key = slot if code == "a" else f"{slot}:kokoro:{code}"
             return key, replace(cfg, language=code)
+        if cfg.engine == "chatterbox-fi" and lang not in (None, "fi"):
+            raise UnsupportedLanguageError("Chatterbox-Finnish only speaks Finnish ('fi').")
         if cfg.engine in _ENGLISH_ONLY_TTS and lang not in (None, "en"):
             raise UnsupportedLanguageError(
                 f"TTS engine '{cfg.engine}' only supports English, not '{language}'. "
@@ -265,6 +267,12 @@ class ModelManager:
                     f"Auto-download failed."
                 )
             return PiperVoice.load(str(model_path))
+        if cfg.engine == "chatterbox-fi":
+            from src.engines_fi.chatterbox_fi import ChatterboxFinnish
+
+            # cfg.model: "sample" (the model repo's Finnish reference voice), a path to a Finnish
+            # reference WAV, or "" for the built-in voice
+            return ChatterboxFinnish.load(self.model_dir, device=cfg.device, ref_wav=cfg.model or None)
         if cfg.engine == "kokoro":
             try:
                 from kokoro import KPipeline

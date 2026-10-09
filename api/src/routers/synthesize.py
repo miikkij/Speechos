@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from src.config import ModelConfig
 from src.docker_tts import docker_synthesize, is_docker_engine
-from src.lang import UnsupportedLanguageError
+from src.lang import UnsupportedLanguageError, base_language, piper_voice_language
 from src.models import ModelNotConfiguredError
 from src.routers._common import parse_language
 from src.server import get_models
@@ -125,6 +125,12 @@ def synthesize_wav(tts: Any, cfg: ModelConfig, inp: SynthesisInput) -> bytes:
     if engine == "piper":
         from piper import SynthesisConfig
 
+        if base_language(inp.language) == "fi" or piper_voice_language(cfg.model) == "fi":
+            from src.engines_fi.text_norm_fi import normalize_fi
+
+            # Numbers, dates, money, clock times, abbreviations → words (benchmark: 80 % → 91 % read right)
+            text = normalize_fi(text)
+
         # length_scale < 1 is faster, > 1 slower
         syn_config = SynthesisConfig(length_scale=1.0 / inp.speed)
         chunks, sample_rate = [], 22050
@@ -134,6 +140,13 @@ def synthesize_wav(tts: Any, cfg: ModelConfig, inp: SynthesisInput) -> bytes:
         if not chunks:
             raise HTTPException(500, "TTS produced no audio")
         return _wav_bytes(_to_int16(np.concatenate(chunks)), sample_rate)
+
+    if engine == "chatterbox-fi":
+        # ChatterboxFinnish (src/engines_fi): normalizes Finnish text itself; no tempo control, so speed is ignored
+        if inp.voice and inp.voice != tts.ref_wav:
+            tts.set_voice(inp.voice)  # path to a Finnish reference WAV for voice cloning
+        audio, sample_rate = tts.synthesize(text)
+        return _wav_bytes(_to_int16(audio), sample_rate)
 
     if engine == "kokoro":
         # KPipeline yields (graphemes, phonemes, audio_tensor)

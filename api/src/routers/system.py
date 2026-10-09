@@ -61,6 +61,8 @@ MODEL_OPTIONS = {
         {"engine": "kokoro", "model": "default", "label": "Kokoro 82M (best quality/size, CPU+GPU)"},
         # Kitten TTS — 15M ultra-tiny CPU model (new 2026)
         {"engine": "kitten", "model": "KittenML/kitten-tts-nano-0.8-fp32", "label": "Kitten TTS nano (15M, CPU, tiny)"},
+        # Chatterbox-Finnish — Finnish fine-tune, CUDA-graph decoding (FI benchmark: CER 3.3 %, RTF 0.43)
+        {"engine": "chatterbox-fi", "model": "sample", "label": "Chatterbox-Finnish (fi, voice cloning, MIT, GPU)"},
         # Chatterbox — best voice cloning, MIT (Multilingual V3 in 2026)
         {"engine": "chatterbox", "model": "multilingual", "label": "Chatterbox Multilingual V3 (fi + 22 langs, voice cloning, MIT)"},
         {"engine": "chatterbox", "model": "english", "label": "Chatterbox English (voice cloning, MIT)"},
@@ -201,6 +203,10 @@ def _check_engine_installed(engine: str) -> bool:
             import kokoro  # noqa: F401
         elif engine == "chatterbox":
             import chatterbox  # noqa: F401
+        elif engine == "chatterbox-fi":
+            import num2words  # noqa: F401
+            import perth  # noqa: F401
+            import s3tokenizer  # noqa: F401
         elif engine == "bark":
             import transformers  # noqa: F401
         elif engine == "espeak":
@@ -280,7 +286,7 @@ async def switch_model(req: SwitchModelRequest):
     compute_type = "int8"
     # Native TTS engines that benefit from / require a GPU (Docker engines manage
     # their own device, and piper/kitten/espeak stay on CPU).
-    GPU_CAPABLE_TTS = {"chatterbox", "kokoro", "bark", "orpheus"}
+    GPU_CAPABLE_TTS = {"chatterbox", "chatterbox-fi", "kokoro", "bark", "orpheus"}
     if config.hardware.gpu_available and config.hardware.mode != ComputeMode.CPU:
         if req.category in ("stt", "emotion", "diarization"):
             device = "cuda"

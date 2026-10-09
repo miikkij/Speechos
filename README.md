@@ -79,7 +79,7 @@ Speechos ships a Finnish benchmark (`api/bench/`) that drives its defaults. Resu
 | Text to speech (round trip, 38 sentences × 3 seeds) | CER | Real-time factor | Notes |
 |---|---:|---:|---|
 | Piper `fi_FI-harri-medium` (default) | 4.65 % ± 1.33 | 0.036 | The only local real-time option |
-| Chatterbox-Finnish + Finnish reference voice | 3.29 % ± 0.26 | 1.28 | Most natural local voice, too slow for live use |
+| Chatterbox-Finnish + Finnish reference voice (CUDA graph) | 3.29 % ± 0.26 | 0.43 | Most natural local voice; optional engine, ~4.4 GB VRAM |
 | eSpeak-NG Finnish | 9.94 % | 0.02 | Robotic fallback |
 
 **Finnish Whisper.** On GPU tiers that run large-v3, requests with `language=fi` use whisper-large-finnish-v3
@@ -95,6 +95,10 @@ uv run ct2-transformers-converter --model ../models/whisper-large-finnish-v3 \
 ```
 
 Turn it off with `SPEECHOS_STT_FI_ENGINE=none`, or point `stt_fi` in `config.yaml` at another model.
+
+**Chatterbox-Finnish.** Install with `uv sync --extra tts-fi` and pick it under Models → Text to speech or in the
+Synthesize view. It downloads about 4 GB on first use, clones a voice from a Finnish reference clip, and reads numbers,
+dates and abbreviations through a Finnish text normalizer (also used in front of Piper).
 
 Full method, all engines and how to reproduce: [api/bench/README.md](api/bench/README.md).
 

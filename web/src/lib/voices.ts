@@ -34,6 +34,12 @@ const KNOWN: Record<string, Meta> = {
         tags: ["Local", "Low memory"],
         note: "Smaller model for CPU-only machines.",
     },
+    "chatterbox-fi|sample": {
+        name: "Chatterbox-Finnish",
+        languages: ["fi"],
+        tags: ["Local", "Natural", "Voice cloning", "GPU"],
+        note: "Most natural local Finnish voice: 3.3% CER, 0.43× real-time on an RTX 4090. About 4.4 GB of VRAM.",
+    },
     "chatterbox|multilingual": {
         name: "Chatterbox Multilingual",
         languages: ["multi"],
