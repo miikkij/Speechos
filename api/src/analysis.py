@@ -9,6 +9,24 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Frames quieter than this (≈ −80 dBFS) are digital silence, not part of the signal's dynamics
+_SILENCE_RMS = 1e-4
+# Diarization windows quieter than −50 dBFS (after volume normalization) are treated as non-speech
+_VOICED_RMS = 10 ** (-50 / 20)
+
+
+def _dynamic_range_db(rms: np.ndarray) -> float:
+    """Loud-to-quiet spread of the audible frames (95th vs 5th percentile RMS), in dB.
+
+    max/min over all frames is dominated by pure-silence frames (padding, gaps between turns)
+    and produces meaningless values like 180 dB.
+    """
+    audible = rms[rms > _SILENCE_RMS]
+    if audible.size < 2:
+        return 0.0
+    lo, hi = np.percentile(audible, [5, 95])
+    return round(float(20 * np.log10(hi / lo)), 1)
+
 
 def extract_audio_features(audio: np.ndarray, sr: int = 16_000) -> dict[str, Any]:
     """Extract acoustic features from audio using librosa.
@@ -60,9 +78,7 @@ def extract_audio_features(audio: np.ndarray, sr: int = 16_000) -> dict[str, Any
         "energy": {
             "mean_db": round(float(20 * np.log10(rms.mean() + 1e-10)), 1),
             "max_db": round(float(20 * np.log10(rms.max() + 1e-10)), 1),
-            "dynamic_range_db": round(
-                float(20 * np.log10((rms.max() + 1e-10) / (rms.min() + 1e-10))), 1
-            ),
+            "dynamic_range_db": _dynamic_range_db(rms),
         },
         "tempo_bpm": round(tempo_val, 1),
         "spectral": {
@@ -381,7 +397,9 @@ def _run_diarization_resemblyzer(
     audio: np.ndarray, sr: int, diarization_model: Any
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run speaker diarization using resemblyzer d-vector embeddings + spectral clustering."""
-    from resemblyzer import preprocess_wav
+    import librosa
+    from resemblyzer.audio import audio_norm_target_dBFS, normalize_volume
+    from resemblyzer.audio import sampling_rate as encoder_sr
     from sklearn.cluster import SpectralClustering
     from sklearn.metrics import silhouette_score
     from sklearn.metrics.pairwise import cosine_similarity
@@ -390,8 +408,13 @@ def _run_diarization_resemblyzer(
     if duration < 0.5:
         return [], {"num_speakers": 0, "speakers": {}}
 
-    # Preprocess audio for resemblyzer (expects float32 at 16kHz)
-    wav = preprocess_wav(audio, source_sr=sr)
+    # Resemblyzer's preprocess_wav also trims long silences, which shifts every window off the
+    # original timeline (segments ended up compressed into the first ~2/3 of the recording).
+    # Resample + normalize only, so window times stay in the recording's own seconds.
+    wav = audio.astype(np.float32)
+    if sr != encoder_sr:
+        wav = librosa.resample(wav, orig_sr=sr, target_sr=encoder_sr)
+    wav = normalize_volume(wav, audio_norm_target_dBFS, increase_only=True)
 
     # Segment into overlapping windows
     window_sec = 1.5
@@ -419,6 +442,11 @@ def _run_diarization_resemblyzer(
             chunk = np.pad(chunk, (0, 16_000 - len(chunk)))
         chunks.append(chunk)
         segments_info.append((start_t, end_t))
+
+    # Silence has no speaker: keep (near-)silent windows out of clustering, or they form a cluster of their own
+    voiced = [i for i, c in enumerate(chunks) if float(np.sqrt(np.mean(np.square(c)))) > _VOICED_RMS]
+    chunks = [chunks[i] for i in voiced]
+    segments_info = [segments_info[i] for i in voiced]
 
     if len(chunks) < 2:
         return [

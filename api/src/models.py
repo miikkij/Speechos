@@ -97,8 +97,29 @@ class ModelManager:
         """Load (if needed) and call ``fn(model, cfg)`` while holding the model's lock."""
         category = key.split(":", 1)[0]
         with self.lock_for(key):
-            model = self._get_or_load(key, cfg, self._loader_for(category))
+            try:
+                model = self._get_or_load(key, cfg, self._loader_for(category))
+            except Exception as e:
+                fallback = self._diarization_fallback(category, cfg, e)
+                if fallback is None:
+                    raise
+                cfg = fallback
+                model = self._get_or_load(key, cfg, self._loader_for(category))
             return fn(model, cfg)
+
+    def _diarization_fallback(self, category: str, cfg: ModelConfig, error: Exception) -> ModelConfig | None:
+        """pyannote is gated on Hugging Face: when it cannot load (no token, terms not accepted,
+        offline), switch diarization to Resemblyzer for this process instead of failing every analysis."""
+        if category != "diarization" or cfg.engine != "pyannote":
+            return None
+        logger.warning(
+            "pyannote diarization (%s) failed to load, falling back to Resemblyzer: %s",
+            cfg.model,
+            str(error).splitlines()[0][:200],
+        )
+        fallback = ModelConfig(engine="resemblyzer", model="dvector", device=cfg.device)
+        self.config.diarization = fallback
+        return fallback
 
     async def run(
         self, category: str, fn: Callable[[Any, ModelConfig], T], *, language: str | None = None
