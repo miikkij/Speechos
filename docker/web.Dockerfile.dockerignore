@@ -1,0 +1,10 @@
+# BuildKit per-Dockerfile ignore (context is the repo root)
+**
+!web/package.json
+!web/pnpm-lock.yaml
+!web/next.config.ts
+!web/next-env.d.ts
+!web/tsconfig.json
+!web/postcss.config.mjs
+!web/eslint.config.mjs
+!web/src/**

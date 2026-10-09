@@ -1,0 +1,6 @@
+# BuildKit per-Dockerfile ignore (context is the repo root)
+**
+!api/pyproject.toml
+!api/uv.lock
+!api/src/**
+**/__pycache__

@@ -21,6 +21,7 @@ services:
       - SPEECHOS_HOST=0.0.0.0
       - SPEECHOS_PORT=36300
       - SPEECHOS_MODEL_DIR=/models
+      - SPEECHOS_RECORDINGS_DIR=/recordings
       - SPEECHOS_COMPUTE_MODE=cpu
       # Override tier if needed:
       # - SPEECHOS_TIER=cpu-8gb
@@ -33,11 +34,12 @@ services:
     build:
       context: ..
       dockerfile: docker/web.Dockerfile
+      args:
+        # Inlined into the browser bundle: must be reachable from the browser
+        NEXT_PUBLIC_API_URL: ${SPEECHOS_PUBLIC_API_URL:-http://localhost:36300}
     container_name: speechos-web
     ports:
       - "36301:36301"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://api:36300
     depends_on:
       api:
         condition: service_healthy

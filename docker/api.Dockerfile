@@ -2,22 +2,23 @@
 # Speechos API — GPU-enabled Python backend
 # ============================================================
 # Multi-stage build: base → dependencies → runtime
-# Supports CUDA GPU acceleration with CPU fallback
+# CUDA 12.8 base to match the torch cu128 wheels in api/uv.lock.
 # ============================================================
 
 # --- Stage 1: Base with CUDA ---
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS base
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04 AS base
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    UV_SYSTEM_PYTHON=1
+    UV_PYTHON=3.12 \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1
 
-# System dependencies for audio processing
+# System dependencies for audio processing (Python comes from uv)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-venv \
-    python3-pip \
+    ca-certificates \
     libsndfile1 \
     libportaudio2 \
     ffmpeg \
@@ -25,42 +26,43 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Use python3.11 as default
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
-
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install uv (pinned)
+COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
 # --- Stage 2: Dependencies ---
 FROM base AS deps
 
-COPY api/pyproject.toml api/uv.lock* ./
-RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
+# Compiler for sdist-only deps (webrtcvad via resemblyzer), deps stage only
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY api/pyproject.toml api/uv.lock ./
+RUN uv python install 3.12 \
+    && uv sync --frozen --no-install-project
 
 # --- Stage 3: Runtime ---
 FROM base AS runtime
 
-# Copy installed packages from deps stage
+# Interpreter + venv from the deps stage (the venv links to /opt/python)
+COPY --from=deps /opt/python /opt/python
 COPY --from=deps /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application source
 COPY api/src ./src
 
-# Model cache volume mount point
+# Model cache / recordings volumes
 VOLUME /models
-ENV SPEECHOS_MODEL_DIR=/models
-
-# Recordings volume mount point
 VOLUME /recordings
+ENV SPEECHOS_MODEL_DIR=/models \
+    SPEECHOS_RECORDINGS_DIR=/recordings \
+    SPEECHOS_PORT=36300
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -fsS http://localhost:36300/health || exit 1
 
-EXPOSE 8000
+EXPOSE 36300
 
-CMD ["python", "-m", "src.server"]
+CMD ["python", "-m", "src"]
