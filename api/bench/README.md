@@ -11,6 +11,8 @@ Yhteenveto ja suositukset: [`docs/plans/2026-10-public/report-b.md`](../../docs/
 | `tts_fi.py` | TTS: round-trip CER/WER ≥ 3 seedillä, vakaus (sd), RTF, TTFA, UTMOS, lisenssi |
 | `tts_engines.py` | TTS-moottorien adapterit (Piper, eSpeak, edge-tts, MMS, Chatterbox ML/Finnish, CSM) |
 | `utmos.py` | UTMOS22-strong + UTMOSv2 -luonnollisuusennusteet |
+| `test_text_norm_fi.py` | Testit `src/engines_fi/text_norm_fi.py`:lle (`uv run --extra tts-fi --extra dev pytest bench/test_text_norm_fi.py`) |
+| `sentences_numbers_fi.txt` | 10 numero-/lyhennelausetta normalisoinnin kohdennettuun mittaukseen |
 | `make_listen_page.py` | Sokkoutettu HTML-kuuntelusivu + avaimen purku |
 | `make_ref.py` | Referenssi-WAV:n nauhoitus selaimessa (16k mono) |
 | `results/` | Tulokset json + md (commitoidaan). `listen/` = klipit, gitignored |
@@ -144,6 +146,8 @@ uv run python bench/make_listen_page.py            # → bench/listen/index.html
 | `mms-tts-fin` | facebook/mms-tts-fin (VITS) | CC-BY-NC-4.0 — vain arviointiin |
 | `chatterbox-finnish-ref` | Finnish-NLP/Chatterbox-Finnish cp986, mallikortin asetukset, suomalainen referenssiääni | MIT |
 | `chatterbox-finnish-preset` | sama, oletusääni `conds.pt` (englantilainen) | MIT |
+| `chatterbox-finnish-ref-graph` | sama, T3-dekoodaus CUDA graphina (`src/engines_fi/chatterbox_graph.py`) — bitilleen sama ääni, ~3× nopeampi | MIT |
+| `chatterbox-finnish-ref-graph-bf16` | sama + Llama-runko bf16 | MIT |
 | `chatterbox-finnish-nat-ref` | "best_naturalness" cp1060 | MIT |
 | `chatterbox-ml-ref`, `-preset` | perus-Chatterbox Multilingual (t3_mtl23ls_v2), `language_id="fi"` | MIT |
 | `csm-fin` | Sesame CSM-1B, suomen parlamenttihienosäätö (prosessori hienosäätörepon omista tiedostoista) | painot Apache-2.0, data CC-BY-NC-ND |
@@ -152,6 +156,9 @@ uv run python bench/make_listen_page.py            # → bench/listen/index.html
 Referenssiääni `*-ref`-moottoreille: oletuksena Chatterbox-Finnish-repon `samples/reference_finnish.wav`
 (`--ref-wav` vaihtaa). Chatterbox-asetukset: Finnish = mallikortti (repetition_penalty 1.2,
 temperature 0.8, exaggeration 0.6); ML = kirjaston oletukset (rp 2.0, cfg 0.5, exaggeration 0.5).
+
+`--normalize-fi` ajaa TTS-syötteen `src/engines_fi/text_norm_fi.py`:n läpi (numerot, lyhenteet → sanoiksi);
+round-trip-referenssi pysyy alkuperäisenä lauseena.
 
 ### Mittarit
 - **CER/WER mean ± sd** — korpustason CER per ajo, keskiarvo ja keskihajonta seedien yli (vakaus).
@@ -200,7 +207,8 @@ Lyhyet 1–5 s klipit (VoxPopuli): large-v3 13,5 %, turbo 16,3 %, Parakeet 14,8 
 | Chatterbox ML, oletusääni | 16,89 % ± 8,74 | 1,09 | 5,4 s | 3,06 |
 
 Piper hajoaa lyhyissä vuoroissa ("Joo, ymmärrän." → ~6 s höpinää joka ajossa). Chatterbox-Finnish on paras
-paikallinen ja vakaa, mutta reaaliaikaa hitaampi (T3-tokenigenerointi 84 % ajasta, 30,9 tok/s).
+paikallinen ja vakaa; CUDA-graph-dekooderilla (`chatterbox-finnish-ref-graph`) RTF 1,28 → 0,43 ja TTFA 4,6 → 1,5 s
+bitilleen samalla äänellä (`results/tts_fi_results_v2-graph.md`).
 
 ## Referenssi-WAV:n teko (klonaus)
 `make_ref.py` (selain, ffmpeg PATH:ssa) tai `ffmpeg -i klippi.mp3 -ac 1 -ar 16000 bench/ref_fi.wav`.

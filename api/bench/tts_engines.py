@@ -177,28 +177,13 @@ class EdgeEngine:
 
 
 def import_chatterbox_vendor(models_root: str):
-    """Import the `chatterbox_` package shipped in the Chatterbox-Finnish snapshot.
+    """Import the `chatterbox_` package bundled in <models_root>/chatterbox-finnish (see src/engines_fi).
 
     PyPI chatterbox-tts pins torch==2.6 / transformers==5.2 and cannot share the API lock, so both the
     base multilingual model and the Finnish fine-tune run on this bundled copy (same upstream code).
     """
-    src = Path(models_root) / "chatterbox-finnish" / "src"
-    if not (src / "chatterbox_").exists():
-        raise FileNotFoundError(
-            f"{src / 'chatterbox_'} missing — snapshot_download('{CHATTERBOX_FI[0]}', revision='{CHATTERBOX_FI[1]}', "
-            f"local_dir='<models-root>/chatterbox-finnish')")
-    if str(src) not in sys.path:
-        sys.path.insert(0, str(src))
-    import chatterbox_  # noqa: F401
-    from chatterbox_.models.t3 import llama_configs
-
-    # The alignment-stream analyzer (multilingual vocab → always on) needs output_attentions=True.
-    # transformers 4.46 (what the bundled code was written for) silently fell back from SDPA to eager;
-    # 4.57 raises instead, so build T3 with eager attention up front. In-memory only.
-    for cfg in llama_configs.LLAMA_CONFIGS.values():
-        if isinstance(cfg, dict) and "attn_implementation" in cfg:
-            cfg["attn_implementation"] = "eager"
-    return chatterbox_
+    from src.engines_fi.chatterbox_fi import import_vendor
+    return import_vendor(Path(models_root) / "chatterbox-finnish")
 
 
 def _base_snapshot() -> Path:
@@ -249,26 +234,34 @@ class ChatterboxFinnishEngine:
     CHECKPOINTS = {"cp986": "best_finnish_multilingual_cp986.safetensors",
                    "cp1060": "best_naturalness_cp1060.safetensors"}
 
-    def __init__(self, cfg, key: str, ref_wav: str | None, checkpoint: str = "cp986") -> None:
+    def __init__(self, cfg, key: str, ref_wav: str | None, checkpoint: str = "cp986",
+                 graph: bool = False, bf16: bool = False) -> None:
         self.cfg = cfg
         self.ref_wav = ref_wav
         self.checkpoint = checkpoint
+        self.graph = graph
+        self.bf16 = bf16
         # Model-card settings (README "Running Inference" + inference_example.py).
         self.params = {"repetition_penalty": 1.2, "temperature": 0.8, "exaggeration": 0.6}
         self.info = EngineInfo(
             key, license="MIT (code+weights); training data CV-15 CC0, CC-BY, Parliament CLARIN PUB+BY+PRIV",
             revision=f"{CHATTERBOX_FI[0]}@{CHATTERBOX_FI[1]} {self.CHECKPOINTS[checkpoint]} + "
                      f"{CHATTERBOX_BASE[0]}@{CHATTERBOX_BASE[1][:10]}",
-            device=cfg.device, params={**self.params, "ref": Path(ref_wav).name if ref_wav else "conds.pt"},
+            device=cfg.device, params={**self.params, "ref": Path(ref_wav).name if ref_wav else "conds.pt",
+                                       "t3_decode": ("CUDA graph + static cache (src/engines_fi/chatterbox_graph.py)" if graph
+                                                     else "bundled loop, eager attention"),
+                                       "t3_backbone_dtype": "bf16" if bf16 else "fp32"},
             notes="Perth watermark applied")
 
     def load(self) -> None:
-        from safetensors.torch import load_file
+        from src.engines_fi.chatterbox_fi import load_model
 
-        cb = import_chatterbox_vendor(self.cfg.models_root)
-        self.model = load_chatterbox_finnish(cb, _base_snapshot(),
-                                             Path(self.cfg.models_root) / "chatterbox-finnish" / "models" /
-                                             self.CHECKPOINTS[self.checkpoint], self.cfg.device, load_file)
+        import_chatterbox_vendor(self.cfg.models_root)
+        self.model = load_model(_base_snapshot(), Path(self.cfg.models_root) / "chatterbox-finnish" / "models" /
+                                self.CHECKPOINTS[self.checkpoint], self.cfg.device)
+        if self.graph:
+            from src.engines_fi.chatterbox_graph import enable_cuda_graph
+            enable_cuda_graph(self.model, bf16=self.bf16)
         if self.ref_wav:
             self.model.prepare_conditionals(self.ref_wav, exaggeration=self.params["exaggeration"])
 
@@ -283,41 +276,6 @@ class ChatterboxFinnishEngine:
     def close(self) -> None:
         del self.model
         free_gpu()
-
-
-def load_chatterbox_finnish(cb, base_dir: Path, finetune: Path, device: str, load_file):
-    """Mirror of the card's ChatterboxTTS.from_local('pretrained_models') + T3 injection, reading the
-    base files straight from the HF cache (no renamed copies)."""
-    import torch
-    from chatterbox_.models.s3gen import S3Gen
-    from chatterbox_.models.t3 import T3
-    from chatterbox_.models.t3.modules.t3_config import T3Config
-    from chatterbox_.models.tokenizers import EnTokenizer
-    from chatterbox_.models.voice_encoder import VoiceEncoder
-    from chatterbox_.tts import ChatterboxTTS, Conditionals
-
-    ve = VoiceEncoder()
-    ve.load_state_dict(load_file(base_dir / "ve.safetensors"))
-    ve.to(device).eval()
-
-    t3_state = load_file(base_dir / "t3_mtl23ls_v2.safetensors")
-    config = T3Config.english_only()
-    config.text_tokens_dict_size = t3_state["text_emb.weight"].shape[0]  # 2454 (multilingual vocab)
-    t3 = T3(hp=config)
-    t3.load_state_dict(t3_state, strict=False)
-    ft = load_file(str(finetune))
-    t3.load_state_dict({k[3:] if k.startswith("t3.") else k: v for k, v in ft.items()}, strict=False)
-    t3.to(device).eval()
-
-    s3gen = S3Gen()
-    s3gen.load_state_dict(load_file(base_dir / "s3gen.safetensors"), strict=False)
-    s3gen.to(device).eval()
-
-    tokenizer = EnTokenizer(str(base_dir / "grapheme_mtl_merged_expanded_v1.json"))
-    conds = Conditionals.load(base_dir / "conds.pt", map_location=None if device == "cuda" else "cpu").to(device)
-    del t3_state, ft
-    torch.cuda.empty_cache() if device == "cuda" else None
-    return ChatterboxTTS(t3, s3gen, ve, tokenizer, device, conds=conds)
 
 
 # ── transformers engines (evaluation only, non-commercial) ─────────────
@@ -422,6 +380,10 @@ def build_engine(key: str, cfg):
         return ChatterboxFinnishEngine(cfg, key, ref)
     if key == "chatterbox-finnish-preset":
         return ChatterboxFinnishEngine(cfg, key, None)
+    if key == "chatterbox-finnish-ref-graph":
+        return ChatterboxFinnishEngine(cfg, key, ref, graph=True)
+    if key == "chatterbox-finnish-ref-graph-bf16":
+        return ChatterboxFinnishEngine(cfg, key, ref, graph=True, bf16=True)
     if key == "chatterbox-finnish-nat-ref":
         return ChatterboxFinnishEngine(cfg, key, ref, checkpoint="cp1060")
     if key == "mms-tts-fin":
@@ -436,5 +398,6 @@ def build_engine(key: str, cfg):
 
 
 ENGINE_KEYS = ["piper-fi", "espeak-fi", "edge-noora", "edge-harri", "chatterbox-ml-preset", "chatterbox-ml-ref",
-               "chatterbox-finnish-ref", "chatterbox-finnish-preset", "chatterbox-finnish-nat-ref", "mms-tts-fin",
+               "chatterbox-finnish-ref", "chatterbox-finnish-ref-graph", "chatterbox-finnish-ref-graph-bf16",
+               "chatterbox-finnish-preset", "chatterbox-finnish-nat-ref", "mms-tts-fin",
                "csm-fin", "zipvoice-suomi"]

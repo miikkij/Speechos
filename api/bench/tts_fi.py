@@ -128,7 +128,7 @@ def _ms(values: list[float]) -> tuple[float, float]:
 
 
 def run_engine(key: str, sentences: list[str], short_set: set[str], seeds: list[int], whisper, scorers,
-               cfg, save_dir: Path | None) -> dict:
+               cfg, save_dir: Path | None, text_fn=None) -> dict:
     import jiwer
     import torch
 
@@ -154,7 +154,7 @@ def run_engine(key: str, sentences: list[str], short_set: set[str], seeds: list[
             for i, sent in enumerate(sentences):
                 try:
                     t0 = time.perf_counter()
-                    audio, sr, ttfa = engine.synth(sent, seed * 10_000 + i)
+                    audio, sr, ttfa = engine.synth(text_fn(sent) if text_fn else sent, seed * 10_000 + i)
                     dt = time.perf_counter() - t0
                 except Exception as e:  # one bad sentence shouldn't kill the run
                     failures += 1
@@ -272,6 +272,9 @@ def main() -> None:
     ap.add_argument("--compute-type", default="float16")
     ap.add_argument("--utmos", nargs="*", default=["utmos22", "utmosv2"], help="naturalness predictors ('' = none)")
     ap.add_argument("--save-audio", default=None, help="dir for the 10 listening clips per engine (seed-0 run)")
+    ap.add_argument("--normalize-fi", action="store_true",
+                    help="spell out numbers/abbreviations with src/engines_fi/text_norm_fi.py before synthesis "
+                         "(the round-trip reference stays the original sentence)")
     ap.add_argument("--tag", default="", help="suffix for result files: tts_fi_results[_<tag>].{json,md}")
     ap.add_argument("--out", default=str(BENCH_DIR / "results"))
     args = ap.parse_args()
@@ -300,6 +303,10 @@ def main() -> None:
     cfg = SimpleNamespace(device=args.device, models_root=args.models_root, api_models=args.api_models,
                           ref_wav=ref_wav)
     save_dir = Path(args.save_audio) if args.save_audio else None
+    text_fn = None
+    if args.normalize_fi:
+        sys.path.insert(0, str(BENCH_DIR.parent))
+        from src.engines_fi.text_norm_fi import normalize_fi as text_fn
     if save_dir:
         save_dir.mkdir(parents=True, exist_ok=True)
         (save_dir / "sentences.json").write_text(json.dumps(LISTEN_SENTENCES, ensure_ascii=False, indent=1),
@@ -315,12 +322,14 @@ def main() -> None:
               "n_short": len(short_set & set(sentences)), "judge": judge_rev, "judge_beam": 5,
               "judge_vad_filter": True, "ref_wav": Path(ref_wav).name, "device": args.device,
               "utmos": {s.name: s.revision for s in scorers}, "catastrophic_cer": CATASTROPHIC_CER,
+              "normalize_fi": bool(args.normalize_fi),
               "date": time.strftime("%Y-%m-%d")}
 
     results: list[dict] = []
     for key in args.engines:
         try:
-            results.append(run_engine(key, sentences, short_set, args.seeds, whisper, scorers, cfg, save_dir))
+            results.append(run_engine(key, sentences, short_set, args.seeds, whisper, scorers, cfg, save_dir,
+                                      text_fn=text_fn))
         except Exception as e:
             traceback.print_exc()
             results.append({"engine": key, "info": {"license": "?", "revision": "?", "local": True},

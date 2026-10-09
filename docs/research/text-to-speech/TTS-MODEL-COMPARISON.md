@@ -175,6 +175,8 @@ UTMOS22-strong / UTMOSv2 are English/Japanese-trained naturalness predictors —
 | edge-tts fi-FI-NooraNeural (cloud, reference) | 1.95 % ± 0.04 | 3.4 % | 0.0 % | 0 | 0.20 | 0.50 s | 3.88 | MS online service |
 | edge-tts fi-FI-HarriNeural (cloud, reference) | 2.17 % ± 0.04 | 4.1 % | 0.0 % | 0 | 0.28 | 0.63 s | 4.00 | MS online service |
 | **Chatterbox-Finnish cp986 + fi reference voice** (`Finnish-NLP/Chatterbox-Finnish@d15775e`) | **3.29 % ± 0.26** | 8.2 % | 4.3 % | 1.0 | 1.28 | 4.6 s | 3.72 | MIT |
+| ↳ same, T3 decode as CUDA graph (`api/src/engines_fi/chatterbox_graph.py`) | 3.29 % ± 0.26 (bit-identical) | 8.2 % | 4.3 % | 1.0 | **0.43** | **1.5 s** | 3.72 | MIT |
+| ↳ same, CUDA graph + bf16 backbone | 2.73 % ± 0.40 | 7.9 % | 2.8 % | 0.3 | 0.32 | 1.2 s | 3.71 | MIT |
 | MMS-TTS fin (`facebook/mms-tts-fin@0b8a1a2`) | 3.41 % ± 0.78 | 13.9 % | 2.8 % | 0 | 0.02 | 0.07 s | 3.31 | CC-BY-NC-4.0 |
 | Chatterbox Multilingual + fi reference (`ResembleAI/chatterbox@5bb1f6e`, t3_mtl23ls_v2) | 3.95 % ± 1.21 | 6.7 % | 0.9 % | 1.0 | 1.00 | 4.4 s | 3.46 | MIT |
 | **Piper fi_FI-harri-medium** (current default) | 4.65 % ± 1.33 | 11.5 % | 15.0 % | 1.7 | 0.04 | 0.11 s | 3.38 | GPL-3.0 engine; voice CC0 data (from lessac) |
@@ -191,15 +193,20 @@ UTMOS22-strong / UTMOSv2 are English/Japanese-trained naturalness predictors —
   It needs a Finnish reference voice: with the built-in (English) voice CER rises to 5.3 % ± 1.3.
   Its remaining errors are mostly digits ("12 A", "24."), not babble. **But it is slower than real time on
   an RTX 4090 (RTF ≈ 1.3, ~4.6 s to first audio)** with the card configuration (eager attention, CFG,
-  alignment analyzer) — unusable for live dialogue without streaming/optimisation. Profile: T3 token
-  generation is 84 % of the time (30.9 tokens/s; 25 tokens = 1 s audio), S3Gen 16 %, watermark 1 %.
+  alignment analyzer). Profile: T3 token generation is 84 % of the time (30.9 tokens/s; 25 tokens = 1 s audio),
+  bound by Python/kernel-launch overhead. **Capturing the T3 decode step as a CUDA graph** (static KV cache,
+  static 4D mask, eager attention only in the analyzer's layers 9/12/13) gives bit-identical audio at RTF 0.43
+  and ~1.5 s to first audio (78 tokens/s); a bf16 backbone reaches RTF 0.32. Module:
+  `api/src/engines_fi/chatterbox_fi.py`.
 - **Piper-fi is not as stable as the single June run suggested** (3.5 %): CER 3.2–5.9 % across runs, and
   it fails on very short turns — "Joo, ymmärrän." comes out as ~6 s of babble in every run.
 - The base Chatterbox Multilingual default voice remains unusable for Finnish (catastrophic in 4.3
   sentences/run); with a Finnish reference voice it becomes reasonable.
 - MMS-TTS is intelligible and fast but non-commercial — evaluation only.
-- Number/abbreviation reading is the common weak spot of all local engines → a Finnish text normalizer
-  (numbers → words) in front of TTS is the cheapest improvement.
+- Number/abbreviation reading is the common weak spot of all local engines. A Finnish text normalizer
+  (`api/src/engines_fi/text_norm_fi.py`, num2words with case heuristics) in front of TTS fixes it: on 10
+  number/abbreviation sentences × 3 seeds the share of key items read correctly rises from 40 % to 99 % for
+  Chatterbox-Finnish and from 80 % to 91 % for Piper (`api/bench/results/tts_fi_number_items.md`).
 - Packaging: PyPI `chatterbox-tts` 0.1.7 pins `torch==2.6` / `transformers==5.2` and cannot share the
   Speechos lock (torch 2.10, transformers 4.57). The bench runs both Chatterbox variants on the code
   bundled in the Chatterbox-Finnish repo (MIT) with eager attention (needed by its alignment analyzer
