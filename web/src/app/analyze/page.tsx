@@ -58,6 +58,8 @@ function AnalyzeWorkspace() {
     const [modelsLine, setModelsLine] = useState<string | null>(null);
 
     const result = recordingId ? results[recordingId] : undefined;
+    // Changes whenever a new analysis result lands; used to refresh the "Models:" line
+    const analysedAt = result?.analysis?.processing_time ?? null;
     const blob = result?.blob ?? null;
     const peaks = usePeaks(blob, BUCKETS);
     const { attach: attachAudio, ...audio } = useAudioElement(blob);
@@ -85,7 +87,8 @@ function AnalyzeWorkspace() {
                 setModelsLine(["stt", "emotion", "diarization"].map(label).filter(Boolean).join(" · ") || null);
             })
             .catch(() => setModelsLine(null));
-    }, []);
+        // Re-read after each analysis: the API may switch a model (e.g. gated pyannote → Resemblyzer)
+    }, [analysedAt]);
 
     const transcription = result?.transcription ?? null;
     const analysis = result?.analysis ?? null;

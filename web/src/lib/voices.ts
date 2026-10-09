@@ -6,7 +6,7 @@ export interface Voice {
     model: string;
     name: string;
     detail: string;
-    /** ISO 639-1 codes; "multi" when the engine speaks many languages. */
+    /** ISO 639-1 codes; "multi" = verified to speak Finnish and English; "other" = not verified. */
     languages: string[];
     tags: string[];
     note: string;
@@ -20,13 +20,13 @@ interface Meta {
     note: string;
 }
 
-// Notes on Finnish voices come from api/bench (round-trip character error rate, RTF).
+// Notes on Finnish voices come from api/bench (2026-10: round-trip CER over 3 seeds, RTF on an RTX 4090).
 const KNOWN: Record<string, Meta> = {
     "piper|fi_FI-harri-medium": {
         name: "Harri",
         languages: ["fi"],
         tags: ["Local", "Fast"],
-        note: "Clearest Finnish voice in the benchmark: 3.5% CER, about 30× real-time.",
+        note: "Fast and clear: 4.7% CER in the Finnish benchmark, about 30× real-time. Can stumble on very short replies.",
     },
     "piper|fi_FI-harri-low": {
         name: "Harri (light)",
@@ -38,7 +38,7 @@ const KNOWN: Record<string, Meta> = {
         name: "Chatterbox Multilingual",
         languages: ["multi"],
         tags: ["Local", "Expressive", "Voice cloning", "GPU"],
-        note: "Experimental in Finnish: 4.9–16.5% CER between runs.",
+        note: "Expressive, but needs a Finnish reference voice: 4.0% CER with one, 17% without. Slower than real-time.",
     },
     "espeak|fi": {
         name: "eSpeak Finnish",
@@ -51,12 +51,15 @@ const KNOWN: Record<string, Meta> = {
     "piper|en_US-lessac-medium": { name: "Lessac", languages: ["en"], tags: ["Local", "Fast"], note: "Default English voice." },
 };
 
+/**
+ * Only Finnish/English codes in the model name are trusted. A label like "17 langs" says nothing about
+ * Finnish (XTTS-v2 has no Finnish), so other engines are listed under "all languages" only.
+ */
 function guessLanguages(opt: ModelOption): string[] {
     const m = opt.model.toLowerCase();
     if (m.startsWith("fi_") || m === "fi") return ["fi"];
     if (m.startsWith("en_") || m === "en" || m === "english") return ["en"];
-    if (/multilingual|\d+\s*langs?\b|languages/i.test(opt.label)) return ["multi"];
-    return ["en"];
+    return ["other"];
 }
 
 /** Turns the API's TTS options into voice cards. */

@@ -13,13 +13,31 @@ interface InsightsProps {
     modelsLine: string | null;
 }
 
+/** First line of an API error, trimmed so a stack of Hugging Face details does not fill the card. */
+function shortError(message: string): string {
+    const first = message.split(/\n|(?<=\.)\s/)[0].trim();
+    return first.length > 140 ? `${first.slice(0, 137)}…` : first;
+}
+
+/** Words per minute over the transcribed segments — far more reliable than the onset-based estimate. */
+function transcriptWpm(transcription: TranscriptionResult | null): number | null {
+    if (!transcription?.segments.length) return null;
+    let words = 0;
+    let seconds = 0;
+    for (const seg of transcription.segments) {
+        words += seg.text.trim().split(/\s+/).filter(Boolean).length;
+        seconds += Math.max(0, seg.end - seg.start);
+    }
+    return seconds > 1 ? (words / seconds) * 60 : null;
+}
+
 function rateNote(wpm: number): string {
     if (wpm < 110) return "slow";
     if (wpm > 170) return "fast";
     return "typical conversation";
 }
 
-function summarize(analysis: AnalysisResult, speakers: Map<string, { name: string }>): string {
+function summarize(analysis: AnalysisResult, speakers: Map<string, { name: string }>, wpm: number): string {
     const parts: string[] = [];
     const diar = analysis.diarization;
     const n = diar?.summary.num_speakers ?? 0;
@@ -33,7 +51,6 @@ function summarize(analysis: AnalysisResult, speakers: Map<string, { name: strin
     if (analysis.primary_emotion) {
         parts.push(`Delivery is mostly ${emotionLabel(analysis.primary_emotion).toLowerCase()}.`);
     }
-    const wpm = analysis.features.speaking_rate.estimated_wpm;
     if (wpm > 0) parts.push(`Pace is ${rateNote(wpm)} at about ${Math.round(wpm)} words per minute.`);
     return parts.join(" ");
 }
@@ -61,7 +78,9 @@ export function Insights({ analysis, transcription, analyzing, speakers, modelsL
     const speakerTotals = diar ? Object.entries(diar.summary.speakers) : [];
     const totalSpeech = speakerTotals.reduce((a, [, s]) => a + s, 0);
     const speechRatio = analysis.speech?.speech_ratio;
-    const summary = summarize(analysis, speakers);
+    const measuredWpm = transcriptWpm(transcription);
+    const wpm = measuredWpm ?? f.speaking_rate.estimated_wpm;
+    const summary = summarize(analysis, speakers, wpm);
 
     const voice = [
         f.pitch.mean_hz != null && {
@@ -71,8 +90,8 @@ export function Insights({ analysis, transcription, analyzing, speakers, modelsL
         },
         {
             label: "Speaking rate",
-            value: `${Math.round(f.speaking_rate.estimated_wpm)} wpm`,
-            note: rateNote(f.speaking_rate.estimated_wpm),
+            value: `${Math.round(wpm)} wpm`,
+            note: measuredWpm != null ? `${rateNote(wpm)} · from transcript` : `${rateNote(wpm)} · estimate`,
         },
         { label: "Loudness", value: `${f.energy.mean_db.toFixed(0)} dB`, note: `range ${f.energy.dynamic_range_db.toFixed(0)} dB` },
         {
@@ -111,7 +130,7 @@ export function Insights({ analysis, transcription, analyzing, speakers, modelsL
                     ))
                 ) : (
                     <p className="m-0 text-[13px] text-muted">
-                        {analysis.emotion_error ?? "Emotion recognition is not enabled for this hardware tier."}{" "}
+                        {analysis.emotion_error ? shortError(analysis.emotion_error) : "Emotion recognition is not enabled for this hardware tier."}{" "}
                         <Link href="/models">Choose a model</Link>
                     </p>
                 )}
@@ -135,7 +154,7 @@ export function Insights({ analysis, transcription, analyzing, speakers, modelsL
                     })
                 ) : (
                     <p className="m-0 text-[13px] text-muted">
-                        {diar?.error ?? "Speaker analysis is not enabled for this hardware tier."}{" "}
+                        {diar?.error ? shortError(diar.error) : "Speaker analysis is not enabled for this hardware tier."}{" "}
                         <Link href="/models">Choose a model</Link>
                     </p>
                 )}
