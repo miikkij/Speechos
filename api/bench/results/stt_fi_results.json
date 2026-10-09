@@ -1,0 +1,18 @@
+[
+  {
+    "model": "large-v3",
+    "dataset": "fleurs",
+    "device": "cuda",
+    "compute_type": "float16",
+    "n_clips": 100,
+    "seed": 1234,
+    "wer": 0.0789,
+    "cer": 0.0146,
+    "total_audio_s": 1195.4,
+    "total_proc_s": 69.7,
+    "rtf": 0.058,
+    "latency_median_s": 0.655,
+    "latency_p95_s": 1.088,
+    "cold_first_s": 1.273
+  }
+]

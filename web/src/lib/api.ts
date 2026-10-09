@@ -126,10 +126,11 @@ export async function transcribe(file: Blob, language?: string): Promise<Transcr
     return res.json();
 }
 
-export async function synthesize(text: string, engine?: string, model?: string): Promise<Blob> {
+export async function synthesize(text: string, engine?: string, model?: string, language?: string): Promise<Blob> {
     const body: Record<string, string> = { text };
     if (engine) body.engine = engine;
     if (model) body.model = model;
+    if (language) body.language = language;
     const res = await apiFetch("/api/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

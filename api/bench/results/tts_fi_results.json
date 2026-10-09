@@ -1,0 +1,24 @@
+[
+  {
+    "engine_key": "piper-fi",
+    "n": 30,
+    "wer": 0.1029,
+    "cer": 0.0318,
+    "tts_rtf": 0.033,
+    "synth_median_s": 0.109,
+    "total_audio_s": 101.9,
+    "failures": 0,
+    "mos_mean": 0.0
+  },
+  {
+    "engine_key": "chatterbox-fi-preset",
+    "n": 30,
+    "wer": 0.2629,
+    "cer": 0.1652,
+    "tts_rtf": 0.72,
+    "synth_median_s": 3.428,
+    "total_audio_s": 160.0,
+    "failures": 0,
+    "mos_mean": 0.0
+  }
+]

@@ -140,13 +140,28 @@ class ModelManager:
                 raise ImportError("Kitten TTS not installed. Run: pip install kittentts")
             return KittenTTS(cfg.model or "KittenML/kitten-tts-nano-0.8-fp32")
         if cfg.engine == "chatterbox":
-            try:
-                from chatterbox.tts import ChatterboxTTS
-            except ImportError:
-                raise ImportError("Chatterbox not installed. Run: pip install chatterbox-tts")
             import torch
             device = "cuda" if cfg.device == "cuda" and torch.cuda.is_available() else "cpu"
-            return ChatterboxTTS.from_pretrained(device=device)
+            # model="multilingual" → Chatterbox Multilingual (23+ langs incl. Finnish, needs
+            # language_id at generate-time). Anything else → English-only model.
+            multilingual = (cfg.model or "").lower() in ("multilingual", "mtl", "ml")
+            if multilingual:
+                try:
+                    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+                except ImportError:
+                    raise ImportError("Chatterbox not installed. Run: pip install chatterbox-tts")
+                model = ChatterboxMultilingualTTS.from_pretrained(device=device)
+            else:
+                try:
+                    from chatterbox.tts import ChatterboxTTS
+                except ImportError:
+                    raise ImportError("Chatterbox not installed. Run: pip install chatterbox-tts")
+                model = ChatterboxTTS.from_pretrained(device=device)
+            return {
+                "model": model,
+                "multilingual": multilingual,
+                "sr": getattr(model, "sr", 24000),
+            }
         if cfg.engine == "orpheus":
             try:
                 from orpheus_tts import OrpheusModel

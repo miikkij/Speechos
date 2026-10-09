@@ -23,6 +23,7 @@ class SynthesizeRequest(BaseModel):
     text: str
     voice: str | None = None
     speed: float = 1.0
+    language: str | None = None  # e.g. "fi" — used by multilingual engines (Chatterbox)
 
 
 @router.post("/synthesize")
@@ -98,9 +99,19 @@ async def synthesize(req: SynthesizeRequest):
         audio_int16 = (audio * 32767).astype(np.int16)
 
     elif engine == "chatterbox":
-        wav = tts.generate(req.text)
-        # Returns tensor [1, samples] at 24kHz
-        sample_rate = 24000
+        # tts is a dict: {"model", "multilingual", "sr"} (see ModelManager._load_tts)
+        cb = tts["model"]
+        sample_rate = tts.get("sr", 24000)
+        gen_kwargs: dict = {}
+        if tts.get("multilingual"):
+            # Multilingual model requires a language_id (default English if unset)
+            gen_kwargs["language_id"] = req.language or "en"
+        if req.voice:
+            # For Chatterbox, `voice` is a path to a reference WAV for voice cloning.
+            # Absent → built-in preset voice.
+            gen_kwargs["audio_prompt_path"] = req.voice
+        wav = cb.generate(req.text, **gen_kwargs)
+        # Returns tensor [1, samples]
         audio = wav.squeeze().cpu().numpy()
         audio_int16 = (audio * 32767).astype(np.int16)
 

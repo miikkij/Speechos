@@ -54,17 +54,22 @@ MODEL_OPTIONS = {
         {"engine": "piper", "model": "en_US-arctic-medium", "label": "Piper: Arctic Medium"},
         {"engine": "piper", "model": "en_US-libritts-high", "label": "Piper: LibriTTS High"},
         {"engine": "piper", "model": "en_GB-alan-medium", "label": "Piper: Alan British Medium"},
+        # Piper — Finnish voices (rhasspy/piper-voices)
+        {"engine": "piper", "model": "fi_FI-harri-medium", "label": "Piper: Harri Finnish Medium (fi, fast, CPU)"},
+        {"engine": "piper", "model": "fi_FI-harri-low", "label": "Piper: Harri Finnish Low (fi, fastest)"},
         # Kokoro — #1 TTS Arena, 82M params
         {"engine": "kokoro", "model": "default", "label": "Kokoro 82M (best quality/size, CPU+GPU)"},
         # Kitten TTS — 15M ultra-tiny CPU model (new 2026)
         {"engine": "kitten", "model": "KittenML/kitten-tts-nano-0.8-fp32", "label": "Kitten TTS nano (15M, CPU, tiny)"},
         # Chatterbox — best voice cloning, MIT (Multilingual V3 in 2026)
-        {"engine": "chatterbox", "model": "default", "label": "Chatterbox Multilingual V3 (voice cloning, 23+ langs, MIT)"},
+        {"engine": "chatterbox", "model": "multilingual", "label": "Chatterbox Multilingual V3 (fi + 22 langs, voice cloning, MIT)"},
+        {"engine": "chatterbox", "model": "english", "label": "Chatterbox English (voice cloning, MIT)"},
         # Bark — versatile with effects
         {"engine": "bark", "model": "suno/bark", "label": "Bark (music/effects, slow, GPU rec.)"},
         {"engine": "bark", "model": "suno/bark-small", "label": "Bark Small (faster, less quality)"},
         # eSpeak-NG — rule-based, instant
         {"engine": "espeak", "model": "en", "label": "eSpeak-NG (robotic, instant, 100+ langs)"},
+        {"engine": "espeak", "model": "fi", "label": "eSpeak-NG Finnish (robotic, instant, fi)"},
         # ── Docker engines (run in WSL2 containers) ─────────
         # VibeVoice — long-form, multi-speaker podcast TTS (new 2026)
         {"engine": "vibevoice", "model": "vibevoice/VibeVoice-1.5B", "label": "[Docker] VibeVoice 1.5B (long-form, multi-speaker)"},
