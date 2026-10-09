@@ -82,7 +82,11 @@ export function useRecorder(deviceId?: string, settings?: AudioSettings): UseRec
         updateLevel();
 
         // Record from the gain-processed stream
-        const mr = new MediaRecorder(dest.stream, { mimeType: "audio/webm;codecs=opus" });
+        // The server re-encodes everything to 16 kHz mono WAV, so any supported container is fine
+        const mimeType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"].find(
+            (t) => MediaRecorder.isTypeSupported(t),
+        );
+        const mr = new MediaRecorder(dest.stream, mimeType ? { mimeType } : undefined);
         chunksRef.current = [];
 
         mr.ondataavailable = (e) => {
@@ -95,7 +99,7 @@ export function useRecorder(deviceId?: string, settings?: AudioSettings): UseRec
             cancelAnimationFrame(animFrameRef.current);
             setAudioLevel(0);
 
-            const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+            const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
             resolveStopRef.current?.(blob);
         };
 

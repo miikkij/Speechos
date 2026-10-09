@@ -1,5 +1,26 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:36300";
 
+/** Language sent to the API. "auto" lets STT detect it and TTS use the configured voice. */
+export type Language = "auto" | "fi" | "en";
+
+export const LANGUAGES: { value: Language; label: string }[] = [
+    { value: "fi", label: "Suomi" },
+    { value: "en", label: "English" },
+    { value: "auto", label: "Auto" },
+];
+
+/** File name with an extension that matches the blob's real container. */
+function audioFileName(file: Blob): string {
+    if (file instanceof File && file.name) return file.name;
+    const type = file.type.toLowerCase();
+    if (type.includes("webm")) return "recording.webm";
+    if (type.includes("ogg")) return "recording.ogg";
+    if (type.includes("mp4") || type.includes("aac")) return "recording.m4a";
+    if (type.includes("mpeg")) return "recording.mp3";
+    if (type.includes("flac")) return "recording.flac";
+    return "recording.wav";
+}
+
 export interface TranscriptionResult {
     text: string;
     segments: { start: number; end: number; text: string }[];
@@ -98,6 +119,12 @@ export interface DiarizationResult {
     error?: string;
 }
 
+export interface SpeechActivity {
+    segments: { start: number; end: number }[];
+    speech_seconds: number;
+    speech_ratio: number;
+}
+
 export interface AnalysisResult {
     features: AudioFeatures;
     emotions: EmotionScore[];
@@ -106,6 +133,8 @@ export interface AnalysisResult {
     emotion_available: boolean;
     diarization: DiarizationResult;
     diarization_available: boolean;
+    speech?: SpeechActivity | null;
+    vad_available?: boolean;
     processing_time: number;
 }
 
@@ -118,19 +147,25 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     return res;
 }
 
-export async function transcribe(file: Blob, language?: string): Promise<TranscriptionResult> {
+export async function transcribe(file: Blob, language: Language = "auto"): Promise<TranscriptionResult> {
     const form = new FormData();
-    form.append("file", file, "recording.wav");
-    if (language) form.append("language", language);
+    form.append("file", file, audioFileName(file));
+    form.append("language", language);
     const res = await apiFetch("/api/transcribe", { method: "POST", body: form });
     return res.json();
 }
 
-export async function synthesize(text: string, engine?: string, model?: string, language?: string): Promise<Blob> {
-    const body: Record<string, string> = { text };
-    if (engine) body.engine = engine;
-    if (model) body.model = model;
-    if (language) body.language = language;
+export interface SynthesizeOptions {
+    language?: Language;
+    speed?: number;
+    voice?: string;
+}
+
+export async function synthesize(text: string, options: SynthesizeOptions = {}): Promise<Blob> {
+    const body: { text: string; language?: string; speed?: number; voice?: string } = { text };
+    if (options.language && options.language !== "auto") body.language = options.language;
+    if (options.speed !== undefined) body.speed = options.speed;
+    if (options.voice) body.voice = options.voice;
     const res = await apiFetch("/api/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,7 +182,7 @@ export async function getRecordings(): Promise<Recording[]> {
 
 export async function uploadRecording(file: Blob): Promise<Recording> {
     const form = new FormData();
-    form.append("file", file, "recording.wav");
+    form.append("file", file, audioFileName(file));
     const res = await apiFetch("/api/recordings", { method: "POST", body: form });
     return res.json();
 }
@@ -194,7 +229,7 @@ export async function checkHealth(): Promise<boolean> {
 
 export async function analyze(file: Blob): Promise<AnalysisResult> {
     const form = new FormData();
-    form.append("file", file, "recording.wav");
+    form.append("file", file, audioFileName(file));
     const res = await apiFetch("/api/analyze", { method: "POST", body: form });
     return res.json();
 }

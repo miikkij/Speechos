@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { synthesize, getModelOptions, switchModel, type ModelOption } from "@/lib/api";
+import { synthesize, getModelOptions, switchModel, type Language, type ModelOption } from "@/lib/api";
 import { AudioPlayer } from "./AudioPlayer";
 
-export function TtsPlayground() {
+const SPEEDS = [0.75, 1, 1.25, 1.5];
+
+interface TtsPlaygroundProps {
+    language: Language;
+}
+
+export function TtsPlayground({ language }: TtsPlaygroundProps) {
     const [text, setText] = useState("");
+    const [speed, setSpeed] = useState(1);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [loading, setLoading] = useState(false);
     const [switching, setSwitching] = useState(false);
@@ -44,7 +51,7 @@ export function TtsPlayground() {
         setLoading(true);
         setError(null);
         try {
-            const blob = await synthesize(text);
+            const blob = await synthesize(text, { language, speed });
             setAudioBlob(blob);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Synthesis failed");
@@ -89,7 +96,7 @@ export function TtsPlayground() {
             <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Enter text to synthesize..."
+                placeholder={language === "en" ? "Enter text to synthesize..." : "Kirjoita syntetisoitava teksti..."}
                 rows={3}
                 maxLength={10000}
                 className="w-full rounded-lg p-3 text-sm resize-y outline-none focus:ring-1"
@@ -109,6 +116,27 @@ export function TtsPlayground() {
                 >
                     {loading ? "Synthesizing..." : "Speak"}
                 </button>
+                <label className="flex items-center gap-1 text-xs" style={{ color: "var(--muted)" }}>
+                    Speed
+                    <select
+                        aria-label="Speed"
+                        value={speed}
+                        onChange={(e) => setSpeed(Number(e.target.value))}
+                        disabled={loading}
+                        className="text-xs rounded-lg px-2 py-1"
+                        style={{
+                            background: "var(--surface-2)",
+                            color: "var(--fg)",
+                            border: "1px solid var(--border)",
+                        }}
+                    >
+                        {SPEEDS.map((s) => (
+                            <option key={s} value={s}>
+                                {s}×
+                            </option>
+                        ))}
+                    </select>
+                </label>
                 <span className="text-xs" style={{ color: "var(--muted)" }}>
                     {text.length}/10000
                 </span>

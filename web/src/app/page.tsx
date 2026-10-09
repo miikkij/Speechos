@@ -9,7 +9,9 @@ import { TtsPlayground } from "@/components/TtsPlayground";
 import { StatusBar } from "@/components/StatusBar";
 import { RecordingsLibrary } from "@/components/RecordingsLibrary";
 import { ModelSelectors } from "@/components/ModelSelectors";
+import { LanguageSelect } from "@/components/LanguageSelect";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
+import { useLanguage } from "@/hooks/useLanguage";
 import { transcribe, analyze, uploadRecording, type TranscriptionResult, type AnalysisResult, type Recording } from "@/lib/api";
 
 type Tab = "record" | "tts";
@@ -25,6 +27,7 @@ export default function Home() {
     const [error, setError] = useState<string | null>(null);
     const [refreshRecordings, setRefreshRecordings] = useState(0);
     const { devices, selectedId, setSelectedId } = useAudioDevices();
+    const [language, setLanguage] = useLanguage();
 
     const processAudio = useCallback(async (blob: Blob, label: string, shouldUpload: boolean) => {
         setRecordingBlob(blob);
@@ -35,7 +38,7 @@ export default function Home() {
         setTranscribing(true);
         setAnalyzing(true);
         try {
-            const promises: Promise<unknown>[] = [transcribe(blob)];
+            const promises: Promise<unknown>[] = [transcribe(blob, language)];
             if (shouldUpload) {
                 promises.push(
                     uploadRecording(blob)
@@ -58,7 +61,7 @@ export default function Home() {
         } finally {
             setAnalyzing(false);
         }
-    }, []);
+    }, [language]);
 
     const handleRecorded = useCallback((blob: Blob) => {
         processAudio(blob, "Recording", true);
@@ -79,11 +82,14 @@ export default function Home() {
             <StatusBar />
 
             {/* Header */}
-            <header className="px-6 py-6">
-                <h1 className="text-2xl font-bold tracking-tight">Speechos</h1>
-                <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-                    Local-first speech analysis &amp; synthesis
-                </p>
+            <header className="px-6 py-6 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">Speechos</h1>
+                    <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+                        Local-first speech analysis &amp; synthesis
+                    </p>
+                </div>
+                <LanguageSelect value={language} onChange={setLanguage} disabled={transcribing} />
             </header>
 
             {/* Tabs */}
@@ -181,7 +187,7 @@ export default function Home() {
                         </>
                     )}
 
-                    {tab === "tts" && <TtsPlayground />}
+                    {tab === "tts" && <TtsPlayground language={language} />}
                 </div>
             </main>
 
