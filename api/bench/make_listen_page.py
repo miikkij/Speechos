@@ -86,7 +86,7 @@ upd();
 """
     (listen_dir / "index.html").write_text(page, encoding="utf-8")
     (listen_dir / "key.json").write_text(json.dumps(key, indent=1), encoding="utf-8")
-    print(f"{len(sentences)} sentences × {len(engines)} engines → {listen_dir / 'index.html'}  (key: key.json)")
+    print(f"{len(sentences)} sentences x {len(engines)} engines -> {listen_dir / 'index.html'}  (key: key.json)")
 
 
 def unblind(listen_dir: Path, ratings_path: Path) -> None:
@@ -108,7 +108,7 @@ def unblind(listen_dir: Path, ratings_path: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build / unblind the Finnish TTS listening page")
     ap.add_argument("--dir", default=str(BENCH_DIR / "listen"))
-    ap.add_argument("--seed", type=int, default=20261009, help="shuffle seed for the blinded order")
+    ap.add_argument("--seed", type=int, default=73104, help="shuffle seed for the blinded order")
     ap.add_argument("--unblind", default=None, help="ratings.json downloaded from the page")
     args = ap.parse_args()
     d = Path(args.dir)
