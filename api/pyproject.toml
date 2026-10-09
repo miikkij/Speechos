@@ -75,6 +75,7 @@ tts-fi = [
     "omegaconf>=2.3",
     "einops>=0.6",
     "safetensors>=0.4",
+    "num2words>=0.5.13",  # src/engines_fi/text_norm_fi.py
 ]
 
 [build-system]
