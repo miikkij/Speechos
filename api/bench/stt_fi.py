@@ -39,7 +39,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -83,6 +83,19 @@ MODELS: dict[str, dict] = {
                              "revision": "541d1f99c6b0c3cd0b11a95167540bb8edefd82b", "license": "CC-BY-4.0"},
     "qwen3-asr-1.7b": {"backend": "qwen-asr", "repo": "Qwen/Qwen3-ASR-1.7B",
                        "revision": "7278e1e70fe206f11671096ffdd38061171dd6e5", "license": "Apache-2.0"},
+}
+
+# Known training-data overlap with the eval sets (checked 2026-10-09). "LEAK" = the eval split itself
+# was in the training data → that row is invalid for model comparison.
+TRAIN_OVERLAP: dict[tuple[str, str], str] = {
+    # Finnish-NLP/voxpopuli_fi_audio_processed has 9074 rows = VoxPopuli-fi train 7878 + validation 718
+    # + test 478 (start_train.sh in the model repo) → the VoxPopuli test/validation clips were trained on.
+    ("fi-whisper-v3", "voxpopuli"): "LEAK: VoxPopuli-fi train+val+test in training data",
+    ("fi-whisper-v3", "voxpopuli-short"): "LEAK: VoxPopuli-fi train+val+test in training data",
+    ("fi-whisper-v3", "fleurs"): "in-domain: FLEURS-fi train split in training data (test clean)",
+    ("fi-whisper-v3", "commonvoice"): "in-domain: CV11-fi train+validation in training data",
+    ("parakeet-tdt-0.6b-v3", "voxpopuli"): "possible: Granary/MOSEL pseudo-labels VoxPopuli audio",
+    ("parakeet-tdt-0.6b-v3", "voxpopuli-short"): "possible: Granary/MOSEL pseudo-labels VoxPopuli audio",
 }
 
 # HF parquet conversions (refs/convert/parquet) — pinned commits.
@@ -380,7 +393,7 @@ class Result:
     license: str = ""
     mean_clip_s: float = 0.0
     date: str = ""
-    extra: dict = field(default_factory=dict)
+    train_overlap: str = ""
 
 
 def _p95(values: list[float]) -> float:
@@ -420,15 +433,42 @@ def score(model_name: str, dataset_name: str, clips: list[tuple[np.ndarray, str]
 
 def markdown_table(results: list[Result]) -> str:
     head = (
-        "| Model | Dataset | n | clip avg (s) | WER | CER | RTF | lat.med (s) | lat.p95 (s) | cold (s) | License |\n"
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|\n"
+        "| Model | Dataset | n | clip avg (s) | WER | CER | RTF | lat.med (s) | lat.p95 (s) | cold (s) | License "
+        "| Train overlap |\n"
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|\n"
     )
     rows = [
         f"| {r.model} | {r.dataset} | {r.n_clips} | {r.mean_clip_s:.1f} | {r.wer:.1%} | {r.cer:.2%} | "
-        f"{r.rtf:.3f} | {r.latency_median_s:.2f} | {r.latency_p95_s:.2f} | {r.cold_first_s:.2f} | {r.license} |"
+        f"{r.rtf:.3f} | {r.latency_median_s:.2f} | {r.latency_p95_s:.2f} | {r.cold_first_s:.2f} | {r.license} | "
+        f"{('⚠ ' + r.train_overlap) if r.train_overlap.startswith('LEAK') else r.train_overlap} |"
         for r in results
     ]
     return head + "\n".join(rows) + "\n"
+
+
+def write_md(md_path: Path, results: list[Result], params: dict) -> str:
+    md = markdown_table(results)
+    tag = params.get("tag") or ""
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(f"# Finnish STT benchmark{(' — ' + tag) if tag else ''}\n\n"
+                f"Date {results[0].date if results else '?'} · seed={params['seed']} · n≤{params['n']}/dataset · "
+                f"device={params['device']} · faster-whisper compute={params['compute_type']}, "
+                f"beam={params['beam_size']}, vad_filter=True\n\n{md}\n"
+                "Model and dataset revisions: `model_revision` / `dataset_revision` in the JSON. WER/CER on "
+                "normalized text. ⚠ LEAK rows: the eval split was in that model's training data — not a valid "
+                "comparison.\n")
+    return md
+
+
+def render(json_path: Path) -> None:
+    """Re-render the .md of an existing results JSON (refreshes the train-overlap notes)."""
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    results = [Result(**{k: v for k, v in r.items() if k != "extra"}) for r in data["results"]]
+    for r in results:
+        r.train_overlap = TRAIN_OVERLAP.get((r.model, r.dataset), "")
+    data["results"] = [asdict(r) for r in results]
+    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(write_md(json_path.with_suffix(".md"), results, data["params"]))
 
 
 def main() -> None:
@@ -453,7 +493,13 @@ def main() -> None:
     ap.add_argument("--cv-hf-name", default="mozilla-foundation/common_voice_17_0")
     ap.add_argument("--tag", default="", help="suffix for result files: stt_fi_results[_<tag>].{json,md}")
     ap.add_argument("--out", default=str(BENCH_DIR / "results"))
+    ap.add_argument("--render", default=None, metavar="JSON",
+                    help="only re-render the .md of an existing results JSON")
     args = ap.parse_args()
+
+    if args.render:
+        render(Path(args.render))
+        return
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -483,6 +529,7 @@ def main() -> None:
                 res.model_revision = backend.revision
                 res.dataset_revision = dataset_revision(ds_name, args)
                 res.license = spec.get("license", "?")
+                res.train_overlap = TRAIN_OVERLAP.get((model_name, ds_name), "")
                 results.append(res)
                 all_details[f"{model_name}|{ds_name}"] = details
                 print(f"    → WER={res.wer:.1%} CER={res.cer:.2%} RTF={res.rtf:.3f} "
@@ -500,14 +547,8 @@ def main() -> None:
         json.dump({"params": params, "results": [asdict(r) for r in results]}, f, indent=2, ensure_ascii=False)
     with open(out_dir / f"stt_fi_details{suffix}.json", "w", encoding="utf-8") as f:
         json.dump(all_details, f, indent=1, ensure_ascii=False)
-    md = markdown_table(results)
     md_path = out_dir / f"stt_fi_results{suffix}.md"
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write(f"# Finnish STT benchmark{(' — ' + args.tag) if args.tag else ''}\n\n"
-                f"Date {time.strftime('%Y-%m-%d')} · seed={args.seed} · n≤{args.n}/dataset · "
-                f"device={args.device} · faster-whisper compute={args.compute_type}, beam={args.beam_size}, "
-                f"vad_filter=True\n\n{md}\n"
-                "Model revisions: see `model_revision` in the JSON. WER/CER on normalized text.\n")
+    md = write_md(md_path, results, params)
 
     print("\n" + "=" * 70)
     print(md)
