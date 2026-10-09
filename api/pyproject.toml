@@ -94,7 +94,7 @@ markers = [
 target-version = "py311"
 line-length = 120
 src = ["."]
-extend-exclude = ["bench"]
+extend-exclude = ["bench", "src/engines_fi"]  # session B code; opt in after merge
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
