@@ -155,6 +155,9 @@ def normalize_fi(text: str) -> str:
     text = _PERCENT.sub(lambda m: f"{m.group(1)} prosenttia", text)
     text = _DECIMAL.sub(_decimal, text)
     text = _NUM_LETTER.sub(lambda m: f"{_card(int(m.group(1)))} {LETTER_NAMES.get(m.group(2), m.group(2))}", text)
+    # A number joined to a word with a hyphen is one compound when read: "3-vuotias" → "kolmevuotias",
+    # "1990-luvulla" → "tuhat yhdeksänsataayhdeksänkymmentäluvulla"
+    text = re.sub(r"\b(\d+)-([a-zåäö]\w*)", lambda m: f"{_card(int(m.group(1)))}{m.group(2)}", text)
     text = _INT_BEFORE_WORD.sub(lambda m: f"{_card(int(m.group(1)), _noun_case(m.group(3)))}{m.group(2)}{m.group(3)}",
                                 text)
     text = _INT.sub(lambda m: _card(int(m.group(0))), text)

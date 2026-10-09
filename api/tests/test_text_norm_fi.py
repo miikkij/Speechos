@@ -27,7 +27,8 @@ from src.engines_fi.text_norm_fi import normalize_fi  # noqa: E402
     ("Numero on +358 40 1234567.",
      "Numero on plus kolme viisi kahdeksan, neljä nolla, yksi kaksi kolme neljä viisi kuusi seitsemän."),
     ("Se tapahtui 5 vuotta sitten.", "Se tapahtui viisi vuotta sitten."),
-    ("Asuin 1990-luvulla 2 vuotta Turussa.", "Asuin tuhat yhdeksänsataayhdeksänkymmentä-luvulla kaksi vuotta Turussa."),
+    ("Asuin 1990-luvulla 2 vuotta Turussa.", "Asuin tuhat yhdeksänsataayhdeksänkymmentäluvulla kaksi vuotta Turussa."),
+    ("Hänellä on 3-vuotias tytär.", "Hänellä on kolmevuotias tytär."),
 ])
 def test_normalize_fi(raw: str, expected: str) -> None:
     assert normalize_fi(raw) == expected
