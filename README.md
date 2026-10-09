@@ -78,7 +78,7 @@ Speechos ships a Finnish benchmark (`api/bench/`) that drives its defaults. Resu
 
 | Text to speech (round trip, 38 sentences × 3 seeds) | CER | Real-time factor | Notes |
 |---|---:|---:|---|
-| Piper `fi_FI-harri-medium` (default) | 4.65 % ± 1.33 | 0.036 | The only local real-time option |
+| Piper `fi_FI-harri-medium` (default) | 4.65 % ± 1.33 | 0.036 | Fastest, runs on CPU; garbles some short replies (e.g. "Ymmärrän.") |
 | Chatterbox-Finnish + Finnish reference voice (CUDA graph) | 3.29 % ± 0.26 | 0.43 | Most natural local voice; optional engine, ~4.4 GB VRAM |
 | eSpeak-NG Finnish | 9.94 % | 0.02 | Robotic fallback |
 

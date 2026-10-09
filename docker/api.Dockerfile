@@ -39,8 +39,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
     && rm -rf /var/lib/apt/lists/*
 
 COPY api/pyproject.toml api/uv.lock ./
+# gpu: pyannote diarization + ModelScope; tts-fi: Chatterbox-Finnish and the Finnish text normalizer
 RUN uv python install 3.12 \
-    && uv sync --frozen --no-install-project
+    && uv sync --frozen --no-install-project --extra gpu --extra tts-fi
 
 # --- Stage 3: Runtime ---
 FROM base AS runtime
