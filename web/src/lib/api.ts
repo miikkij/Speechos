@@ -4,9 +4,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:36300";
 export type Language = "auto" | "fi" | "en";
 
 export const LANGUAGES: { value: Language; label: string }[] = [
-    { value: "fi", label: "Suomi" },
+    { value: "fi", label: "Finnish" },
     { value: "en", label: "English" },
-    { value: "auto", label: "Auto" },
+    { value: "auto", label: "Detect automatically" },
 ];
 
 /** File name with an extension that matches the blob's real container. */

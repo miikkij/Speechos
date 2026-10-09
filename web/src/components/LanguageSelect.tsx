@@ -6,23 +6,21 @@ interface LanguageSelectProps {
     value: Language;
     onChange: (lang: Language) => void;
     disabled?: boolean;
+    label?: string;
+    /** "inline" sits in the header; "stacked" puts the label above a full-width field. */
+    layout?: "inline" | "stacked";
 }
 
-export function LanguageSelect({ value, onChange, disabled }: LanguageSelectProps) {
+export function LanguageSelect({ value, onChange, disabled, label = "Language", layout = "inline" }: LanguageSelectProps) {
+    const stacked = layout === "stacked";
     return (
-        <label className="flex items-center gap-2 text-xs" style={{ color: "var(--muted)" }}>
-            Language
+        <label className={`flex text-muted ${stacked ? "flex-col gap-1.5 text-xs" : "items-center gap-2 text-[13px]"}`}>
+            {label}
             <select
-                aria-label="Language"
                 value={value}
                 onChange={(e) => onChange(e.target.value as Language)}
                 disabled={disabled}
-                className="text-sm rounded-lg px-2 py-1"
-                style={{
-                    background: "var(--surface-2)",
-                    color: "var(--fg)",
-                    border: "1px solid var(--border)",
-                }}
+                className={`rounded-lg border border-line-2 bg-surface-2 text-fg ${stacked ? "p-2.5 text-sm" : "px-2.5 py-1.5"}`}
             >
                 {LANGUAGES.map((l) => (
                     <option key={l.value} value={l.value}>
