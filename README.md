@@ -52,6 +52,10 @@ cp .env.example .env                       # optional: HF_TOKEN for pyannote dia
 ```
 
 ```bash
+./dev.sh             # Linux / WSL2 / macOS: same, with --api or --web for one of them
+```
+
+```bash
 pnpm dev:api         # API only  (cd api && uv run python -m src)
 pnpm dev:web         # web only
 ```
