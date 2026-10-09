@@ -86,6 +86,8 @@ recordings/
 
 # Model downloads
 models/
+# …but not the web UI's /models route
+!web/src/app/models/
 *.bin
 *.pt
 *.onnx
