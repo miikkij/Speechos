@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,9 @@ class ModelConfig:
     device: str = "cpu"
     compute_type: str | None = None
     runtime: str | None = None
+    # Language a TTS model instance is built for (Kokoro lang pipeline). Set by
+    # ModelManager when it resolves a per-language variant; not a user setting.
+    language: str | None = None
 
 
 @dataclass
@@ -36,6 +40,9 @@ class HardwareProfile:
     gpu_name: str | None
     vram_gb: float
     tier: str
+
+
+MODEL_SLOTS = ("stt", "tts", "tts_fast", "tts_expressive", "tts_clone", "emotion", "diarization", "vad")
 
 
 @dataclass
@@ -66,40 +73,53 @@ class AppConfig:
 
 # ── Tier definitions ──────────────────────────────────────
 
-TIER_CONFIGS: dict[str, dict[str, Any]] = {
+# Finnish-first default voice (FI benchmark winner, CER 3.5 %). Requests with
+# another language switch to that language's Piper voice (see src/lang.py).
+_PIPER_FI: dict[str, Any] = {"engine": "piper", "model": "fi_FI-harri-medium", "device": "cpu"}
+
+# Placeholder resolved in load_config(): pyannote community-1 when HF_TOKEN is set
+# and pyannote.audio is installed, Resemblyzer otherwise.
+_PYANNOTE_OR_RESEMBLYZER = "pyannote-or-resemblyzer"
+PYANNOTE_DIARIZATION: dict[str, Any] = {
+    "engine": "pyannote", "model": "pyannote/speaker-diarization-community-1", "device": "cuda",
+}
+RESEMBLYZER_DIARIZATION: dict[str, Any] = {"engine": "resemblyzer", "model": "dvector", "device": "cuda"}
+
+TIER_CONFIGS: dict[str, Any] = {
     # CPU-only
     "cpu-2gb": {
-        "stt": {"engine": "vosk", "model": "vosk-model-small-en-us-0.15", "device": "cpu"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        # Whisper tiny instead of Vosk: the Vosk default model is English-only.
+        "stt": {"engine": "faster-whisper", "model": "tiny", "device": "cpu", "compute_type": "int8"},
+        "tts": _PIPER_FI,
         "emotion": None,
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "cpu-4gb": {
         "stt": {"engine": "faster-whisper", "model": "tiny", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": None,
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "cpu-8gb": {
         "stt": {"engine": "faster-whisper", "model": "base", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": None,
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "cpu-16gb": {
         "stt": {"engine": "faster-whisper", "model": "small", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "tts_fast": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
+        "tts_fast": _PIPER_FI,
         "emotion": None,
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "cpu-32gb": {
         "stt": {"engine": "faster-whisper", "model": "medium", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": None,
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
@@ -107,80 +127,84 @@ TIER_CONFIGS: dict[str, dict[str, Any]] = {
     # GPU-only
     "gpu-4gb": {
         "stt": {"engine": "faster-whisper", "model": "small", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": None,
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "gpu-8gb": {
         "stt": {"engine": "faster-whisper", "model": "turbo", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_base_finetuned", "device": "cuda"},
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "gpu-12gb": {
         "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "int8_float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_base_finetuned", "device": "cuda"},
-        "diarization": {"engine": "resemblyzer", "model": "dvector", "device": "cuda"},
+        "diarization": _PYANNOTE_OR_RESEMBLYZER,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "gpu-24gb": {
         "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_plus_large", "device": "cuda"},
-        "diarization": {"engine": "resemblyzer", "model": "dvector", "device": "cuda"},
+        "diarization": _PYANNOTE_OR_RESEMBLYZER,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "gpu-32gb": {
         "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_plus_large", "device": "cuda"},
-        "diarization": {"engine": "resemblyzer", "model": "dvector", "device": "cuda"},
+        "diarization": _PYANNOTE_OR_RESEMBLYZER,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     # Hybrid
     "hybrid-4gb-gpu": {
         "stt": {"engine": "faster-whisper", "model": "small", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": None,
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "hybrid-8gb-gpu": {
         "stt": {"engine": "faster-whisper", "model": "turbo", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_base_finetuned", "device": "cuda"},
         "diarization": None,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "hybrid-12gb-gpu": {
         "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "int8_float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_base_finetuned", "device": "cuda"},
-        "diarization": {"engine": "resemblyzer", "model": "dvector", "device": "cuda"},
+        "diarization": _PYANNOTE_OR_RESEMBLYZER,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "hybrid-24gb-gpu": {
         "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_plus_large", "device": "cuda"},
-        "diarization": {"engine": "resemblyzer", "model": "dvector", "device": "cuda"},
+        "diarization": _PYANNOTE_OR_RESEMBLYZER,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
     "hybrid-32gb-gpu": {
         "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
+        "tts": _PIPER_FI,
         "emotion": {"engine": "emotion2vec", "model": "iic/emotion2vec_plus_large", "device": "cuda"},
-        "diarization": {"engine": "resemblyzer", "model": "dvector", "device": "cuda"},
+        "diarization": _PYANNOTE_OR_RESEMBLYZER,
         "vad": {"engine": "silero", "model": "v5", "device": "cpu"},
     },
 }
 
 
-def detect_hardware() -> HardwareProfile:
-    """Auto-detect available hardware and determine optimal tier."""
+def detect_hardware(mode_override: str | None = None, tier_override: str | None = None) -> HardwareProfile:
+    """Auto-detect available hardware and determine optimal tier.
+
+    ``SPEECHOS_COMPUTE_MODE`` / ``SPEECHOS_TIER`` env vars win over the arguments,
+    which carry the ``compute_mode`` / ``tier`` keys of config.yaml.
+    """
     cpu_cores = psutil.cpu_count(logical=False) or 4
     ram_gb = psutil.virtual_memory().total / (1024**3)
 
@@ -197,8 +221,8 @@ def detect_hardware() -> HardwareProfile:
     except ImportError:
         pass
 
-    mode_override = os.environ.get("SPEECHOS_COMPUTE_MODE")
-    if mode_override:
+    mode_override = os.environ.get("SPEECHOS_COMPUTE_MODE") or mode_override
+    if mode_override and mode_override != "auto":
         mode = ComputeMode(mode_override)
     elif gpu_available and ram_gb >= 8:
         mode = ComputeMode.HYBRID
@@ -207,7 +231,13 @@ def detect_hardware() -> HardwareProfile:
     else:
         mode = ComputeMode.CPU
 
-    tier = _resolve_tier(mode, ram_gb, vram_gb)
+    tier_override = os.environ.get("SPEECHOS_TIER") or tier_override
+    if tier_override and tier_override != "auto":
+        if tier_override not in TIER_CONFIGS:
+            raise ValueError(f"Unknown tier: {tier_override!r}. Valid: {', '.join(TIER_CONFIGS)}")
+        tier = tier_override
+    else:
+        tier = _resolve_tier(mode, ram_gb, vram_gb)
 
     return HardwareProfile(
         mode=mode,
@@ -221,10 +251,6 @@ def detect_hardware() -> HardwareProfile:
 
 
 def _resolve_tier(mode: ComputeMode, ram_gb: float, vram_gb: float) -> str:
-    tier_override = os.environ.get("SPEECHOS_TIER")
-    if tier_override:
-        return tier_override
-
     if mode == ComputeMode.CPU:
         if ram_gb <= 2:
             return "cpu-2gb"
@@ -259,43 +285,59 @@ def _resolve_tier(mode: ComputeMode, ram_gb: float, vram_gb: float) -> str:
     return "hybrid-32gb-gpu"
 
 
+def pyannote_available() -> bool:
+    """pyannote community-1 is gated on HuggingFace: needs HF_TOKEN + the package."""
+    if not os.environ.get("HF_TOKEN"):
+        return False
+    try:
+        return importlib.util.find_spec("pyannote.audio") is not None
+    except ModuleNotFoundError:
+        return False
+
+
+def _resolve_slot(value: Any) -> dict[str, Any] | None:
+    if value == _PYANNOTE_OR_RESEMBLYZER:
+        return dict(PYANNOTE_DIARIZATION if pyannote_available() else RESEMBLYZER_DIARIZATION)
+    return dict(value) if value is not None else None
+
+
 def _dict_to_model_config(d: dict[str, Any] | None) -> ModelConfig | None:
-    if d is None:
+    if d is None or d.get("engine") in (None, "none"):
         return None
+    d = dict(d)
+    d.setdefault("model", "default")
     return ModelConfig(**d)
 
 
+def _find_config_file() -> str | None:
+    if v := os.environ.get("SPEECHOS_CONFIG"):
+        return v
+    for candidate in ["config.yaml", "config.yml", "../config.yaml"]:
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
 def load_config(config_path: str | None = None) -> AppConfig:
-    """Load configuration from file, env vars, and auto-detection."""
-    hw = detect_hardware()
-    tier_defaults = TIER_CONFIGS.get(hw.tier, TIER_CONFIGS["cpu-8gb"])
-
-    # Start with tier defaults
-    cfg = AppConfig(
-        hardware=hw,
-        stt=_dict_to_model_config(tier_defaults.get("stt")),
-        tts=_dict_to_model_config(tier_defaults.get("tts")),
-        tts_fast=_dict_to_model_config(tier_defaults.get("tts_fast")),
-        tts_expressive=_dict_to_model_config(tier_defaults.get("tts_expressive")),
-        tts_clone=_dict_to_model_config(tier_defaults.get("tts_clone")),
-        emotion=_dict_to_model_config(tier_defaults.get("emotion")),
-        diarization=_dict_to_model_config(tier_defaults.get("diarization")),
-        vad=_dict_to_model_config(tier_defaults.get("vad")),
-    )
-
-    # Override from YAML config file
+    """Load configuration: tier defaults < config.yaml < SPEECHOS_* env vars."""
     if config_path is None:
-        for candidate in ["config.yaml", "config.yml", "../config.yaml"]:
-            if Path(candidate).exists():
-                config_path = candidate
-                break
-
+        config_path = _find_config_file()
+    yaml_cfg: dict[str, Any] = {}
     if config_path and Path(config_path).exists():
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             yaml_cfg = yaml.safe_load(f) or {}
-        _apply_yaml_overrides(cfg, yaml_cfg)
 
-    # Override from env vars
+    hw = detect_hardware(
+        mode_override=yaml_cfg.get("compute_mode"),
+        tier_override=yaml_cfg.get("tier"),
+    )
+    tier_defaults = TIER_CONFIGS[hw.tier]
+
+    cfg = AppConfig(hardware=hw)
+    for slot in MODEL_SLOTS:
+        setattr(cfg, slot, _dict_to_model_config(_resolve_slot(tier_defaults.get(slot))))
+
+    _apply_yaml_overrides(cfg, yaml_cfg)
     _apply_env_overrides(cfg)
 
     # Ensure directories exist
@@ -308,21 +350,25 @@ def load_config(config_path: str | None = None) -> AppConfig:
 
 def _apply_yaml_overrides(cfg: AppConfig, yaml_cfg: dict[str, Any]) -> None:
     if "server" in yaml_cfg:
-        srv = yaml_cfg["server"]
+        srv = yaml_cfg["server"] or {}
         cfg.host = srv.get("host", cfg.host)
-        cfg.port = srv.get("port", cfg.port)
-        cfg.workers = srv.get("workers", cfg.workers)
-        cfg.cors_origins = srv.get("cors_origins", cfg.cors_origins)
+        cfg.port = int(srv.get("port", cfg.port))
+        cfg.workers = int(srv.get("workers", cfg.workers))
+        cfg.cors_origins = list(srv.get("cors_origins", cfg.cors_origins))
     if "storage" in yaml_cfg:
-        st = yaml_cfg["storage"]
+        st = yaml_cfg["storage"] or {}
         cfg.model_dir = st.get("model_dir", cfg.model_dir)
         cfg.recordings_dir = st.get("recordings_dir", cfg.recordings_dir)
-        cfg.max_upload_mb = st.get("max_upload_mb", cfg.max_upload_mb)
+        cfg.samples_dir = st.get("samples_dir", cfg.samples_dir)
+        cfg.max_upload_mb = int(st.get("max_upload_mb", cfg.max_upload_mb))
     if "model_loading" in yaml_cfg:
         cfg.model_loading = yaml_cfg["model_loading"]
-    for key in ("stt", "tts", "tts_fast", "tts_expressive", "tts_clone", "emotion", "diarization", "vad"):
+    for key in MODEL_SLOTS:
         if key in yaml_cfg and yaml_cfg[key] is not None:
             setattr(cfg, key, _dict_to_model_config(yaml_cfg[key]))
+
+
+_ENV_MODEL_FIELDS = ("engine", "model", "device", "compute_type")
 
 
 def _apply_env_overrides(cfg: AppConfig) -> None:
@@ -330,5 +376,32 @@ def _apply_env_overrides(cfg: AppConfig) -> None:
         cfg.host = v
     if v := os.environ.get("SPEECHOS_PORT"):
         cfg.port = int(v)
+    if v := os.environ.get("SPEECHOS_WORKERS"):
+        cfg.workers = int(v)
     if v := os.environ.get("SPEECHOS_MODEL_DIR"):
         cfg.model_dir = v
+    if v := os.environ.get("SPEECHOS_RECORDINGS_DIR"):
+        cfg.recordings_dir = v
+    if v := os.environ.get("SPEECHOS_CORS_ORIGINS"):
+        cfg.cors_origins = [o.strip() for o in v.split(",") if o.strip()]
+    if v := os.environ.get("SPEECHOS_MODEL_LOADING"):
+        cfg.model_loading = v
+
+    # SPEECHOS_<SLOT>_<FIELD>, e.g. SPEECHOS_STT_MODEL=large-v3, SPEECHOS_EMOTION_ENGINE=none
+    for slot in MODEL_SLOTS:
+        values = {
+            f: os.environ[f"SPEECHOS_{slot.upper()}_{f.upper()}"]
+            for f in _ENV_MODEL_FIELDS
+            if os.environ.get(f"SPEECHOS_{slot.upper()}_{f.upper()}")
+        }
+        if not values:
+            continue
+        if values.get("engine") == "none":
+            setattr(cfg, slot, None)
+            continue
+        current: ModelConfig | None = getattr(cfg, slot)
+        if current is None or ("engine" in values and values["engine"] != current.engine):
+            # New engine: don't inherit the old engine's model name
+            setattr(cfg, slot, _dict_to_model_config({"device": "cpu", **values}))
+        else:
+            setattr(cfg, slot, replace(current, **values))
