@@ -6,9 +6,12 @@ Only one GPU-heavy TTS container should run at a time to avoid OOM on the 24GB G
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import shlex
 import subprocess
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -23,7 +26,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36310/",
         "synth_url": "http://localhost:36310/api/tts",
         "synth_method": "GET",
-        "synth_params": lambda text, voice: {"text": text, "language_id": voice or "en"},
+        "synth_params": lambda text, voice, lang: {"text": text, "language_id": lang or "en"},
         "response_type": "wav_binary",
     },
     "chattts": {
@@ -32,7 +35,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36311/",
         "synth_url": "http://localhost:36311/generate",
         "synth_method": "POST",
-        "synth_params": lambda text, voice: {"text": text},
+        "synth_params": lambda text, voice, lang: {"text": text},
         "response_type": "wav_binary",
     },
     "melotts": {
@@ -41,7 +44,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36312/",
         "synth_url": "http://localhost:36312/tts/convert/tts",
         "synth_method": "POST",
-        "synth_params": lambda text, voice: {
+        "synth_params": lambda text, voice, lang: {
             "text": text,
             "language": "EN",
             "speaker_id": voice or "EN-US",
@@ -54,7 +57,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36313/",
         "synth_url": "http://localhost:36313/api/synthesize",
         "synth_method": "POST",
-        "synth_params": lambda text, voice: {"text": text},
+        "synth_params": lambda text, voice, lang: {"text": text},
         "response_type": "wav_binary",
     },
     "fish-speech": {
@@ -63,7 +66,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36314/",
         "synth_url": "http://localhost:36314/api/synthesize",
         "synth_method": "POST",
-        "synth_params": lambda text, voice: {"text": text},
+        "synth_params": lambda text, voice, lang: {"text": text},
         "response_type": "wav_binary",
     },
     "cosyvoice": {
@@ -72,7 +75,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36315/",
         "synth_url": "http://localhost:36315/api/synthesize",
         "synth_method": "POST",
-        "synth_params": lambda text, voice: {"text": text},
+        "synth_params": lambda text, voice, lang: {"text": text},
         "response_type": "wav_binary",
     },
     "qwen3-tts": {
@@ -81,7 +84,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36316/",
         "synth_url": "http://localhost:36316/base_tts/",
         "synth_method": "GET",
-        "synth_params": lambda text, voice: {"text": text},
+        "synth_params": lambda text, voice, lang: {"text": text},
         "response_type": "wav_binary",
     },
     "parler": {
@@ -90,7 +93,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36317/health",
         "synth_url": "http://localhost:36317/v1/audio/speech",
         "synth_method": "POST",
-        "synth_params": lambda text, voice: {
+        "synth_params": lambda text, voice, lang: {
             "input": text,
             "voice": voice or "A female speaker delivers a clear, natural speech.",
         },
@@ -105,7 +108,7 @@ DOCKER_TTS_ENGINES: dict[str, dict] = {
         "health_url": "http://localhost:36318/health",
         "synth_url": "http://localhost:36318/v1/audio/speech",
         "synth_method": "POST",
-        "synth_params": lambda text, voice: {
+        "synth_params": lambda text, voice, lang: {
             "model": "vibevoice/VibeVoice-1.5B",
             "input": text,
             "voice": voice or "Frank",
@@ -129,17 +132,42 @@ def _wsl_compose_path() -> str:
     return path
 
 
-def _run_docker_cmd(args: list[str], timeout: int = 60) -> subprocess.CompletedProcess:
-    """Run a docker command via WSL2 bash."""
+
+
+@dataclass
+class DockerCmdResult:
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+async def _run_docker_cmd(args: list[str], timeout: float = 60) -> DockerCmdResult:
+    """Run a docker compose command via WSL2 bash without blocking the event loop."""
     compose_path = _wsl_compose_path()
-    cmd_str = " ".join(["docker", "compose", "-f", compose_path] + args)
-    full_cmd = ["bash", "-c", cmd_str]
+    cmd_str = " ".join(shlex.quote(a) for a in ["docker", "compose", "-f", compose_path, *args])
     logger.info("Docker command: %s", cmd_str)
-    return subprocess.run(
-        full_cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "bash", "-c", cmd_str,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except NotImplementedError:
+        # Windows SelectorEventLoop (uvicorn with workers > 1) has no subprocess support
+        done = await asyncio.to_thread(
+            subprocess.run, ["bash", "-c", cmd_str], capture_output=True, text=True, timeout=timeout
+        )
+        return DockerCmdResult(done.returncode, done.stdout, done.stderr)
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise
+    return DockerCmdResult(
+        returncode=proc.returncode if proc.returncode is not None else -1,
+        stdout=stdout.decode("utf-8", errors="replace"),
+        stderr=stderr.decode("utf-8", errors="replace"),
     )
 
 
@@ -153,20 +181,20 @@ def get_docker_config(engine: str) -> dict | None:
     return DOCKER_TTS_ENGINES.get(engine)
 
 
-def is_container_running(engine: str) -> bool:
+async def is_container_running(engine: str) -> bool:
     """Check if a Docker TTS container is running."""
     cfg = DOCKER_TTS_ENGINES.get(engine)
     if not cfg:
         return False
     try:
-        result = _run_docker_cmd(["ps", "-q", cfg["service"]], timeout=10)
+        result = await _run_docker_cmd(["ps", "-q", cfg["service"]], timeout=10)
         return bool(result.stdout.strip())
     except Exception as e:
         logger.warning("Failed to check container status for %s: %s", engine, e)
         return False
 
 
-def start_container(engine: str, wait_ready: bool = True, timeout: int = 120) -> bool:
+async def start_container(engine: str, wait_ready: bool = True, timeout: float = 120) -> bool:
     """Start a Docker TTS container. Returns True if ready."""
     cfg = DOCKER_TTS_ENGINES.get(engine)
     if not cfg:
@@ -176,9 +204,9 @@ def start_container(engine: str, wait_ready: bool = True, timeout: int = 120) ->
     logger.info("Starting Docker TTS container: %s", engine)
 
     # Stop any other Docker TTS containers first (GPU memory sharing)
-    stop_all_containers(exclude=engine)
+    await stop_all_containers(exclude=engine)
 
-    result = _run_docker_cmd(["up", "-d", cfg["service"]], timeout=120)
+    result = await _run_docker_cmd(["up", "-d", cfg["service"]], timeout=120)
     if result.returncode != 0:
         logger.error("Failed to start %s: %s", engine, result.stderr)
         return False
@@ -186,57 +214,57 @@ def start_container(engine: str, wait_ready: bool = True, timeout: int = 120) ->
     if not wait_ready:
         return True
 
-    # Wait for the container to be healthy
-    health_url = cfg["health_url"]
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            resp = httpx.get(health_url, timeout=5)
-            if resp.status_code < 500:
-                logger.info("Docker TTS container %s is ready", engine)
-                return True
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout):
-            pass
-        time.sleep(3)
+    # Wait for the container's HTTP endpoint to answer
+    deadline = time.monotonic() + timeout
+    async with httpx.AsyncClient(timeout=5) as client:
+        while time.monotonic() < deadline:
+            try:
+                resp = await client.get(cfg["health_url"])
+                if resp.status_code < 500:
+                    logger.info("Docker TTS container %s is ready", engine)
+                    return True
+            except httpx.TransportError:
+                pass
+            await asyncio.sleep(3)
 
     logger.warning("Docker TTS container %s did not become ready within %ds", engine, timeout)
     return False
 
 
-def stop_container(engine: str) -> None:
+async def stop_container(engine: str) -> None:
     """Stop a Docker TTS container."""
     cfg = DOCKER_TTS_ENGINES.get(engine)
     if not cfg:
         return
     logger.info("Stopping Docker TTS container: %s", engine)
-    _run_docker_cmd(["stop", cfg["service"]], timeout=30)
+    await _run_docker_cmd(["stop", cfg["service"]], timeout=30)
 
 
-def stop_all_containers(exclude: str | None = None) -> None:
+async def stop_all_containers(exclude: str | None = None) -> None:
     """Stop all Docker TTS containers except the excluded one."""
-    for engine in DOCKER_TTS_ENGINES:
-        if engine != exclude:
-            if is_container_running(engine):
-                stop_container(engine)
+    others = [e for e in DOCKER_TTS_ENGINES if e != exclude]
+    running = await asyncio.gather(*(is_container_running(e) for e in others))
+    await asyncio.gather(*(stop_container(e) for e, up in zip(others, running) if up))
 
 
-async def docker_synthesize(engine: str, text: str, voice: str | None = None) -> bytes:
+async def docker_synthesize(
+    engine: str, text: str, voice: str | None = None, language: str | None = None
+) -> bytes:
     """Synthesize speech via a Docker TTS container. Returns WAV bytes."""
     cfg = DOCKER_TTS_ENGINES.get(engine)
     if not cfg:
         raise ValueError(f"Unknown Docker TTS engine: {engine}")
 
     # Ensure container is running
-    if not is_container_running(engine):
-        if not start_container(engine):
+    if not await is_container_running(engine):
+        if not await start_container(engine):
             raise RuntimeError(f"Failed to start Docker TTS container: {engine}")
 
-    params = cfg["synth_params"](text, voice)
-    method = cfg["synth_method"]
+    params = cfg["synth_params"](text, voice, language)
     url = cfg["synth_url"]
 
     async with httpx.AsyncClient(timeout=120) as client:
-        if method == "GET":
+        if cfg["synth_method"] == "GET":
             resp = await client.get(url, params=params)
         else:
             resp = await client.post(url, json=params)

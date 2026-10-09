@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.config import ModelConfig
+from src.config import MODEL_SLOTS, ComputeMode, ModelConfig
 from src.server import get_config, get_models
 
 logger = logging.getLogger(__name__)
@@ -138,7 +138,7 @@ async def system_info():
     hw = config.hardware
 
     model_configs = {}
-    for key in ("stt", "tts", "emotion", "diarization", "vad"):
+    for key in MODEL_SLOTS:
         mc = getattr(config, key, None)
         if mc:
             model_configs[key] = {
@@ -194,7 +194,7 @@ def _check_engine_installed(engine: str) -> bool:
         elif engine == "resemblyzer":
             from resemblyzer import VoiceEncoder  # noqa: F401
         elif engine == "silero":
-            import torch  # noqa: F401
+            import silero_vad  # noqa: F401
         elif engine == "piper":
             import piper  # noqa: F401
         elif engine == "kokoro":
@@ -266,7 +266,7 @@ async def switch_model(req: SwitchModelRequest):
     config = get_config()
     models = get_models()
 
-    if req.category not in ("stt", "tts", "emotion", "diarization", "vad"):
+    if req.category not in MODEL_SLOTS:
         raise HTTPException(400, f"Invalid category: {req.category}")
 
     # Handle disabling a model
@@ -281,11 +281,11 @@ async def switch_model(req: SwitchModelRequest):
     # Native TTS engines that benefit from / require a GPU (Docker engines manage
     # their own device, and piper/kitten/espeak stay on CPU).
     GPU_CAPABLE_TTS = {"chatterbox", "kokoro", "bark", "orpheus"}
-    if config.hardware.gpu_available:
+    if config.hardware.gpu_available and config.hardware.mode != ComputeMode.CPU:
         if req.category in ("stt", "emotion", "diarization"):
             device = "cuda"
             compute_type = "float16"
-        elif req.category == "tts" and req.engine in GPU_CAPABLE_TTS:
+        elif req.category.startswith("tts") and req.engine in GPU_CAPABLE_TTS:
             device = "cuda"
 
     new_cfg = ModelConfig(
@@ -321,13 +321,19 @@ async def unload_model(model_key: str):
 @router.get("/system/docker-tts")
 async def docker_tts_status():
     """Return status of Docker TTS engine containers."""
+    import asyncio
+
     from src.docker_tts import DOCKER_TTS_ENGINES, is_container_running
 
-    statuses = {}
-    for engine, cfg in DOCKER_TTS_ENGINES.items():
-        statuses[engine] = {
-            "service": cfg["service"],
-            "port": cfg["port"],
-            "running": is_container_running(engine),
+    engines = list(DOCKER_TTS_ENGINES)
+    running = await asyncio.gather(*(is_container_running(e) for e in engines))
+    return {
+        "engines": {
+            engine: {
+                "service": DOCKER_TTS_ENGINES[engine]["service"],
+                "port": DOCKER_TTS_ENGINES[engine]["port"],
+                "running": up,
+            }
+            for engine, up in zip(engines, running)
         }
-    return {"engines": statuses}
+    }

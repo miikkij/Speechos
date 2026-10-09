@@ -1,24 +1,136 @@
-"""Speechos model manager — lazy loading, caching, VRAM management."""
+"""Speechos model manager — lazy loading, caching, per-model locking.
+
+Inference runs in worker threads (``ModelManager.run``) so the event loop stays
+free. Every cached model instance has its own lock, so one model is never used
+from two threads at once (most are not thread-safe: CTranslate2 Whisper, Silero's
+stateful JIT model, Piper's ONNX session, ...).
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 from collections import OrderedDict
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from src.config import AppConfig, ModelConfig
+from src.lang import (
+    UnsupportedLanguageError,
+    base_language,
+    kokoro_lang_code,
+    piper_voice_for,
+    piper_voice_language,
+)
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
+TTS_SLOTS = ("tts", "tts_fast", "tts_expressive", "tts_clone")
+
+# Engines whose models only speak English
+_ENGLISH_ONLY_TTS = {"kitten", "parler"}
+
+
+class ModelNotConfiguredError(LookupError):
+    """No model configured for the requested category/slot."""
+
 
 class ModelManager:
-    """Manages model lifecycle: download, load, cache, evict."""
+    """Manages model lifecycle: download, load, cache, unload."""
 
     def __init__(self, config: AppConfig) -> None:
         self.config = config
         self.model_dir = Path(config.model_dir)
         self._loaded: OrderedDict[str, Any] = OrderedDict()
+        self._locks: dict[str, threading.Lock] = {}
+        self._guard = threading.Lock()
+
+    # ── Resolution: cache key + effective config ─────────────
+
+    def resolve(self, category: str, language: str | None = None) -> tuple[str, ModelConfig]:
+        """Return (cache_key, config) for a category.
+
+        For TTS slots this picks a per-language variant: a Finnish request on an
+        English Piper voice loads the Finnish voice under its own cache key.
+        Raises ModelNotConfiguredError / UnsupportedLanguageError.
+        """
+        cfg: ModelConfig | None = getattr(self.config, category, None)
+        if cfg is None:
+            raise ModelNotConfiguredError(f"No model configured for '{category}'")
+        if category not in TTS_SLOTS:
+            return category, cfg
+        return self._resolve_tts(category, cfg, language)
+
+    def _resolve_tts(self, slot: str, cfg: ModelConfig, language: str | None) -> tuple[str, ModelConfig]:
+        lang = base_language(language)
+        if cfg.engine == "piper":
+            if lang is None or piper_voice_language(cfg.model) == lang:
+                return slot, cfg
+            voice = piper_voice_for(lang)
+            return f"{slot}:piper:{voice}", replace(cfg, model=voice)
+        if cfg.engine == "kokoro":
+            code = kokoro_lang_code(language)
+            key = slot if code == "a" else f"{slot}:kokoro:{code}"
+            return key, replace(cfg, language=code)
+        if cfg.engine in _ENGLISH_ONLY_TTS and lang not in (None, "en"):
+            raise UnsupportedLanguageError(
+                f"TTS engine '{cfg.engine}' only supports English, not '{language}'. "
+                "For Finnish use Piper (fi_FI-harri-medium) or Chatterbox Multilingual."
+            )
+        return slot, cfg
+
+    # ── Locked access ───────────────────────────────────────
+
+    def lock_for(self, key: str) -> threading.Lock:
+        with self._guard:
+            lock = self._locks.get(key)
+            if lock is None:
+                lock = self._locks[key] = threading.Lock()
+            return lock
+
+    def run_sync(self, key: str, cfg: ModelConfig, fn: Callable[[Any, ModelConfig], T]) -> T:
+        """Load (if needed) and call ``fn(model, cfg)`` while holding the model's lock."""
+        category = key.split(":", 1)[0]
+        with self.lock_for(key):
+            model = self._get_or_load(key, cfg, self._loader_for(category))
+            return fn(model, cfg)
+
+    async def run(
+        self, category: str, fn: Callable[[Any, ModelConfig], T], *, language: str | None = None
+    ) -> T:
+        """Run ``fn(model, cfg)`` for a category in a worker thread (non-blocking)."""
+        key, cfg = self.resolve(category, language)
+        return await asyncio.to_thread(self.run_sync, key, cfg, fn)
+
+    def _loader_for(self, category: str) -> Callable[[ModelConfig], Any]:
+        if category == "stt":
+            return self._load_stt
+        if category in TTS_SLOTS:
+            return self._load_tts
+        if category == "vad":
+            return self._load_vad
+        if category == "emotion":
+            return self._load_emotion
+        if category == "diarization":
+            return self._load_diarization
+        raise ValueError(f"Unknown model category: {category}")
+
+    def preload(self, categories: tuple[str, ...] = ("stt", "tts", "vad")) -> None:
+        """Eager loading (``model_loading: eager``). Failures are logged, not raised."""
+        for category in categories:
+            try:
+                key, cfg = self.resolve(category)
+                with self.lock_for(key):
+                    self._get_or_load(key, cfg, self._loader_for(category))
+            except Exception as e:  # noqa: BLE001 — preload is best-effort
+                logger.warning("Preload of %s failed: %s", category, e)
+
+    # ── Direct (unlocked) getters — for scripts / integration tests ─
 
     def get_stt(self) -> Any:
         return self._get_or_load("stt", self.config.stt, self._load_stt)
@@ -41,13 +153,15 @@ class ModelManager:
 
     def _get_or_load(self, key: str, cfg: ModelConfig | None, loader: Any) -> Any:
         if cfg is None:
-            raise ValueError(f"No configuration for model: {key}")
-        if key in self._loaded:
-            self._loaded.move_to_end(key)
-            return self._loaded[key]
+            raise ModelNotConfiguredError(f"No configuration for model: {key}")
+        with self._guard:
+            if key in self._loaded:
+                self._loaded.move_to_end(key)
+                return self._loaded[key]
         logger.info("Loading model: %s (%s/%s on %s)", key, cfg.engine, cfg.model, cfg.device)
         model = loader(cfg)
-        self._loaded[key] = model
+        with self._guard:
+            self._loaded[key] = model
         return model
 
     def _load_stt(self, cfg: ModelConfig) -> Any:
@@ -132,7 +246,7 @@ class ModelManager:
                 from kokoro import KPipeline
             except ImportError:
                 raise ImportError("Kokoro not installed. Run: pip install kokoro")
-            return KPipeline(lang_code="a")
+            return KPipeline(lang_code=cfg.language or "a", repo_id="hexgrad/Kokoro-82M")
         if cfg.engine == "kitten":
             try:
                 from kittentts import KittenTTS
@@ -293,13 +407,9 @@ class ModelManager:
 
     def _load_vad(self, cfg: ModelConfig) -> Any:
         if cfg.engine == "silero":
-            import torch
-            model, utils = torch.hub.load(
-                repo_or_dir="snakers4/silero-vad",
-                model="silero_vad",
-                trust_repo=True,
-            )
-            return model, utils
+            # The pinned silero-vad pip package ships the model — no torch.hub download
+            from silero_vad import load_silero_vad
+            return load_silero_vad()
         if cfg.engine == "pyannote-vad":
             try:
                 from pyannote.audio import Pipeline
@@ -334,8 +444,8 @@ class ModelManager:
 
     def _load_diarization(self, cfg: ModelConfig) -> Any:
         if cfg.engine == "resemblyzer":
-            from resemblyzer import VoiceEncoder
             import torch
+            from resemblyzer import VoiceEncoder
 
             device = cfg.device
             if device == "cuda" and not torch.cuda.is_available():
@@ -350,12 +460,16 @@ class ModelManager:
                 raise ImportError(
                     "pyannote.audio not installed. Run: pip install pyannote.audio\n"
                     "Also requires accepting terms at:\n"
-                    "  https://huggingface.co/pyannote/speaker-diarization-3.1\n"
-                    "  https://huggingface.co/pyannote/segmentation-3.0"
+                    "  https://huggingface.co/pyannote/speaker-diarization-community-1"
                 )
             import torch
             device = torch.device(cfg.device if cfg.device == "cuda" and torch.cuda.is_available() else "cpu")
+            # Gated model: huggingface_hub picks up HF_TOKEN from the environment
             pipe = Pipeline.from_pretrained(cfg.model)
+            if pipe is None:
+                raise RuntimeError(
+                    f"Could not load {cfg.model}: set HF_TOKEN and accept the model's terms on HuggingFace"
+                )
             pipe.to(device)
             return pipe
         if cfg.engine == "speechbrain":
@@ -398,9 +512,13 @@ class ModelManager:
         logger.info("Vosk model downloaded: %s", dest)
 
     def unload(self, key: str) -> None:
-        if key in self._loaded:
-            del self._loaded[key]
-            logger.info("Unloaded model: %s", key)
+        """Unload a category and its per-language variants (``tts:piper:...``)."""
+        with self._guard:
+            keys = [k for k in self._loaded if k == key or k.startswith(f"{key}:")]
+            for k in keys:
+                del self._loaded[k]
+        for k in keys:
+            logger.info("Unloaded model: %s", k)
 
     def unload_all(self) -> None:
         keys = list(self._loaded.keys())
@@ -409,4 +527,5 @@ class ModelManager:
 
     @property
     def loaded_models(self) -> list[str]:
-        return list(self._loaded.keys())
+        with self._guard:
+            return list(self._loaded.keys())

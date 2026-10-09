@@ -91,7 +91,8 @@ def predict_emotion(
     """
     # Check if this is a transformers pipeline (AudioClassificationPipeline)
     model_type = type(emotion_model).__name__
-    if model_type == "AudioClassificationPipeline" or hasattr(emotion_model, 'task') and not hasattr(emotion_model, 'generate'):
+    is_pipeline = hasattr(emotion_model, "task") and not hasattr(emotion_model, "generate")
+    if model_type == "AudioClassificationPipeline" or is_pipeline:
         return _predict_emotion_pipeline(audio, sr, emotion_model)
 
     # Default: emotion2vec via FunASR
@@ -118,6 +119,7 @@ def _predict_emotion_funasr(
 ) -> list[dict[str, Any]]:
     """Run emotion2vec+ inference via FunASR AutoModel."""
     import tempfile
+
     import soundfile as sf
 
     # emotion2vec via FunASR expects a file path
@@ -169,51 +171,41 @@ def _predict_emotion_funasr(
 
 
 def run_diarization(
-    audio: np.ndarray, sr: int, diarization_model: Any
+    audio: np.ndarray, sr: int, diarization_model: Any, engine: str | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run speaker diarization.
 
-    Dispatches based on model type:
+    Dispatches on the configured engine name (falls back to sniffing the model type):
+    - pyannote Pipeline: end-to-end neural diarization (3.x and 4.x / community-1)
+    - sortformer: NVIDIA NeMo end-to-end diarization
+    - speechbrain: speaker embeddings + spectral clustering
     - resemblyzer VoiceEncoder: d-vector embeddings + spectral clustering
-    - pyannote Pipeline: end-to-end neural diarization
-    - speechbrain: speaker verification-based clustering
     """
     model_type = type(diarization_model).__name__
 
-    # PyAnnote Pipeline
-    if model_type == "Pipeline" and hasattr(diarization_model, 'instantiate'):
+    if engine == "pyannote" or (engine is None and hasattr(diarization_model, "instantiate")):
         return _run_diarization_pyannote(audio, sr, diarization_model)
-
-    # NVIDIA Sortformer (NeMo end-to-end diarization)
-    if model_type == "SortformerEncLabelModel" or hasattr(diarization_model, 'diarize'):
+    if engine == "sortformer" or (engine is None and hasattr(diarization_model, "diarize")):
         return _run_diarization_sortformer(audio, sr, diarization_model)
-
-    # SpeechBrain SpeakerRecognition
-    if model_type in ("SpeakerRecognition", "EncoderClassifier"):
+    if engine == "speechbrain" or (engine is None and model_type in ("SpeakerRecognition", "EncoderClassifier")):
         return _run_diarization_speechbrain(audio, sr, diarization_model)
-
-    # Default: resemblyzer
     return _run_diarization_resemblyzer(audio, sr, diarization_model)
 
 
 def _run_diarization_pyannote(
     audio: np.ndarray, sr: int, pipeline: Any
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Run diarization via pyannote.audio Pipeline."""
+    """Run diarization via a pyannote.audio Pipeline on an in-memory waveform."""
     import torch
-    import io
-    import soundfile as sf
 
-    # PyAnnote expects a file-like object or path
-    buf = io.BytesIO()
-    sf.write(buf, audio, sr, format="WAV")
-    buf.seek(0)
-
-    diarization = pipeline({"uri": "audio", "audio": buf})
+    waveform = torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32)).unsqueeze(0)
+    output = pipeline({"waveform": waveform, "sample_rate": sr})
+    # pyannote 4 returns DiarizeOutput(.speaker_diarization); 3.x returns the Annotation
+    annotation = getattr(output, "speaker_diarization", output)
 
     segments = []
     speaker_times: dict[str, float] = {}
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
+    for turn, _, speaker in annotation.itertracks(yield_label=True):
         dur = turn.end - turn.start
         segments.append({
             "speaker": speaker,
@@ -237,8 +229,9 @@ def _run_diarization_sortformer(
 
     NeMo's `diarize()` returns, per file, a list of "start end speaker" strings.
     """
-    import tempfile
     import os
+    import tempfile
+
     import soundfile as sf
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -479,43 +472,31 @@ def _run_diarization_resemblyzer(
     return _merge_diarization_segments(segments_info, labels, duration)
 
 
-def analyze_audio(
-    audio: np.ndarray,
-    sr: int = 16_000,
-    emotion_model: Any | None = None,
-    diarization_model: Any | None = None,
-) -> dict[str, Any]:
-    """Full audio analysis: acoustic features + optional emotion + optional diarization."""
-    result: dict[str, Any] = {}
+def detect_speech(audio: np.ndarray, sr: int, vad_model: Any, engine: str = "silero") -> dict[str, Any]:
+    """Voice activity detection: speech segments and speech ratio."""
+    duration = len(audio) / sr if sr else 0.0
+    if engine == "silero":
+        import torch
+        from silero_vad import get_speech_timestamps
 
-    # Always extract acoustic features (librosa, no GPU needed)
-    result["features"] = extract_audio_features(audio, sr)
+        stamps = get_speech_timestamps(
+            torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32)), vad_model,
+            sampling_rate=sr, return_seconds=True,
+        )
+        segments = [{"start": round(float(t["start"]), 3), "end": round(float(t["end"]), 3)} for t in stamps]
+    elif engine == "pyannote-vad":
+        import torch
 
-    # Emotion detection (requires emotion2vec model)
-    if emotion_model is not None:
-        try:
-            result["emotions"] = predict_emotion(audio, sr, emotion_model)
-            if result["emotions"]:
-                result["primary_emotion"] = result["emotions"][0]["label"]
-        except Exception as e:
-            logger.warning("Emotion prediction failed: %s", e)
-            result["emotions"] = []
-            result["emotion_error"] = str(e)
+        waveform = torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32)).unsqueeze(0)
+        output = vad_model({"waveform": waveform, "sample_rate": sr})
+        timeline = output.get_timeline().support() if hasattr(output, "get_timeline") else []
+        segments = [{"start": round(seg.start, 3), "end": round(seg.end, 3)} for seg in timeline]
     else:
-        result["emotions"] = []
+        raise ValueError(f"Unknown VAD engine: {engine}")
 
-    # Speaker diarization (requires pyannote model)
-    if diarization_model is not None:
-        try:
-            segments, summary = run_diarization(audio, sr, diarization_model)
-            result["diarization"] = {
-                "segments": segments,
-                "summary": summary,
-            }
-        except Exception as e:
-            logger.warning("Diarization failed: %s", e)
-            result["diarization"] = {"segments": [], "summary": {"num_speakers": 0, "speakers": {}}, "error": str(e)}
-    else:
-        result["diarization"] = {"segments": [], "summary": {"num_speakers": 0, "speakers": {}}}
-
-    return result
+    speech_s = sum(seg["end"] - seg["start"] for seg in segments)
+    return {
+        "segments": segments,
+        "speech_seconds": round(speech_s, 3),
+        "speech_ratio": round(speech_s / duration, 3) if duration > 0 else 0.0,
+    }

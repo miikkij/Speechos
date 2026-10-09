@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import io
-import struct
-import wave
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-
 
 TARGET_SAMPLE_RATE = 16_000
 TARGET_CHANNELS = 1
@@ -24,21 +21,23 @@ def _decode_with_av(source: bytes | str | Path) -> tuple[np.ndarray, int]:
     else:
         container = av.open(io.BytesIO(source))
 
-    stream = container.streams.audio[0]
-    frames = []
-    for frame in container.decode(stream):
-        array = frame.to_ndarray()
-        # av returns shape (channels, samples) — average to mono
-        if array.ndim > 1:
-            array = array.mean(axis=0)
-        frames.append(array)
-    container.close()
+    try:
+        stream = container.streams.audio[0]
+        rate = stream.rate or TARGET_SAMPLE_RATE
+        # Resample to packed float32 mono so every codec/sample format decodes the same way
+        resampler = av.AudioResampler(format="flt", layout="mono", rate=rate)
+        chunks: list[np.ndarray] = []
+        for frame in container.decode(stream):
+            for out in resampler.resample(frame):
+                chunks.append(out.to_ndarray().reshape(-1))
+        for out in resampler.resample(None):
+            chunks.append(out.to_ndarray().reshape(-1))
+    finally:
+        container.close()
 
-    audio = np.concatenate(frames).astype(np.float32)
-    # Normalize int-range to float32 [-1, 1] if needed
-    if audio.max() > 1.0 or audio.min() < -1.0:
-        audio = audio / 32768.0
-    return audio, stream.rate
+    if not chunks:
+        return np.zeros(0, dtype=np.float32), rate
+    return np.concatenate(chunks).astype(np.float32), rate
 
 
 def read_audio(source: bytes | str | Path) -> tuple[np.ndarray, int]:
@@ -82,17 +81,33 @@ def prepare_for_model(source: bytes | str | Path) -> np.ndarray:
 
 
 def audio_duration(source: bytes | str | Path) -> float:
-    """Get audio duration in seconds."""
-    audio, sr = read_audio(source)
-    return len(audio) / sr
+    """Get audio duration in seconds (header only for formats soundfile reads)."""
+    try:
+        if isinstance(source, (str, Path)):
+            return float(sf.info(str(source)).duration)
+        return float(sf.info(io.BytesIO(source)).duration)
+    except Exception:
+        audio, sr = read_audio(source)
+        return len(audio) / sr
 
 
 def float32_to_wav_bytes(audio: np.ndarray, sr: int = TARGET_SAMPLE_RATE) -> bytes:
     """Convert float32 audio array to WAV bytes."""
     buf = io.BytesIO()
-    sf.write(buf, audio, sr, format="WAV", subtype="PCM_16")
+    sf.write(buf, np.clip(audio, -1.0, 1.0), sr, format="WAV", subtype="PCM_16")
     buf.seek(0)
     return buf.read()
+
+
+def to_wav_16k_mono(source: bytes | str | Path) -> tuple[bytes, float]:
+    """Decode any supported input (WAV, WebM/Opus, OGG, MP3, FLAC, ...) and
+    re-encode it as 16 kHz mono 16-bit PCM WAV. Returns (wav_bytes, duration_s).
+
+    The browser's MediaRecorder output format is never trusted: everything that
+    gets stored goes through this.
+    """
+    audio = prepare_for_model(source)
+    return float32_to_wav_bytes(audio, TARGET_SAMPLE_RATE), len(audio) / TARGET_SAMPLE_RATE
 
 
 def validate_audio_file(data: bytes) -> bool:
