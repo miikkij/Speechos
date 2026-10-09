@@ -158,6 +158,54 @@ This document compares open-source text-to-speech models that can be downloaded 
 
 ---
 
+## Finnish (fi) — measured benchmark 2026-10-09
+
+Local measurement with `api/bench/tts_fi.py` (RTX 4090, Windows 11). Full tables, per-sentence
+transcripts and revisions: `api/bench/results/tts_fi_results_v2.{md,json}`; decision write-up:
+`docs/plans/2026-10-public/report-b.md`.
+
+**Method.** 38 Finnish sentences (30 varied + 8 short conversational turns), every engine run with
+3 seeds. Round-trip intelligibility: TTS → faster-whisper large-v3 (`Systran/faster-whisper-large-v3@edaa852`)
+→ CER/WER on normalized text; mean ± sd across runs = stability. "catastr." = sentences with CER > 30 %.
+TTFA = time to first audio via the engine API (= full synthesis for non-streaming engines).
+UTMOS22-strong / UTMOSv2 are English/Japanese-trained naturalness predictors — relative only.
+
+| Engine (revision) | CER mean ± sd | WER | short-turn CER | catastr./run | RTF | TTFA | UTMOS22 | License |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| edge-tts fi-FI-NooraNeural (cloud, reference) | 1.95 % ± 0.04 | 3.4 % | 0.0 % | 0 | 0.20 | 0.50 s | 3.88 | MS online service |
+| edge-tts fi-FI-HarriNeural (cloud, reference) | 2.17 % ± 0.04 | 4.1 % | 0.0 % | 0 | 0.28 | 0.63 s | 4.00 | MS online service |
+| **Chatterbox-Finnish cp986 + fi reference voice** (`Finnish-NLP/Chatterbox-Finnish@d15775e`) | **3.29 % ± 0.26** | 8.2 % | 4.3 % | 1.0 | 1.28 | 4.6 s | 3.72 | MIT |
+| MMS-TTS fin (`facebook/mms-tts-fin@0b8a1a2`) | 3.41 % ± 0.78 | 13.9 % | 2.8 % | 0 | 0.02 | 0.07 s | 3.31 | CC-BY-NC-4.0 |
+| Chatterbox Multilingual + fi reference (`ResembleAI/chatterbox@5bb1f6e`, t3_mtl23ls_v2) | 3.95 % ± 1.21 | 6.7 % | 0.9 % | 1.0 | 1.00 | 4.4 s | 3.46 | MIT |
+| **Piper fi_FI-harri-medium** (current default) | 4.65 % ± 1.33 | 11.5 % | 15.0 % | 1.7 | 0.04 | 0.11 s | 3.38 | GPL-3.0 engine; voice CC0 data (from lessac) |
+| Chatterbox-Finnish cp1060 "naturalness" + fi ref | 5.14 % ± 2.49 | 8.9 % | 24.5 % | 1.3 | 0.83 | 3.0 s | 3.65 | MIT |
+| Chatterbox-Finnish cp986, default (English) voice | 5.34 % ± 1.33 | 13.6 % | 9.5 % | 2.0 | 1.01 | 2.3 s | 3.71 | MIT |
+| eSpeak-NG 1.52 | 9.94 % ± 0.00 | 31.4 % | 3.7 % | 3.0 | 0.02 | 0.04 s | 1.77 | GPL-3.0 |
+| Chatterbox Multilingual, default voice | 16.89 % ± 8.74 | 23.5 % | 59.9 % | 4.3 | 1.09 | 5.4 s | 3.06 | MIT |
+| CSM-1B FIN parliament fine-tune | see `tts_fi_results_v2-csm.md` (paraphrases/babbles, RTF ≈ 4) | | | | | | | weights Apache-2.0, data CC-BY-NC-ND |
+| ZipVoice-Suomi-12k | not run — needs k2 (no Windows build) | | | | | | | CC-BY-ND-4.0 |
+
+**Findings.**
+- **Chatterbox-Finnish** is the best *local* engine on intelligibility and the most stable autoregressive
+  one (sd 0.26 pp vs 1.2 pp for the base multilingual model), and UTMOS ranks it closest to the cloud voices.
+  It needs a Finnish reference voice: with the built-in (English) voice CER rises to 5.3 % ± 1.3.
+  Its remaining errors are mostly digits ("12 A", "24."), not babble. **But it is slower than real time on
+  an RTX 4090 (RTF ≈ 1.3, ~4.6 s to first audio)** with the card configuration (eager attention, CFG,
+  alignment analyzer) — unusable for live dialogue without streaming/optimisation.
+- **Piper-fi is not as stable as the single June run suggested** (3.5 %): CER 3.2–5.9 % across runs, and
+  it fails on very short turns — "Joo, ymmärrän." comes out as ~6 s of babble in every run.
+- The base Chatterbox Multilingual default voice remains unusable for Finnish (catastrophic in 4.3
+  sentences/run); with a Finnish reference voice it becomes reasonable.
+- MMS-TTS is intelligible and fast but non-commercial — evaluation only.
+- Number/abbreviation reading is the common weak spot of all local engines → a Finnish text normalizer
+  (numbers → words) in front of TTS is the cheapest improvement.
+- Packaging: PyPI `chatterbox-tts` 0.1.7 pins `torch==2.6` / `transformers==5.2` and cannot share the
+  Speechos lock (torch 2.10, transformers 4.57). The bench runs both Chatterbox variants on the code
+  bundled in the Chatterbox-Finnish repo (MIT) with eager attention (needed by its alignment analyzer
+  on transformers ≥ 4.47).
+
+---
+
 ## Python Package Summary
 
 ```bash
