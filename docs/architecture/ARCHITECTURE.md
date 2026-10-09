@@ -14,11 +14,14 @@ Speechos is a local-first speech analysis and synthesis platform. Record speech 
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ Web UI — Next.js 15 + React 19 + Tailwind (web/, pnpm, :36301)│
+│ Web UI — Next.js 16 + React 19 + Tailwind (web/, pnpm, :36301)│
 │                                                              │
-│  Recorder (MediaRecorder) · Upload · Recordings library      │
-│  Transcription view · Analysis view · TTS playground         │
-│  Language selector (Suomi / English / Auto, localStorage)    │
+│  /capture     record (MediaRecorder) · upload · recent       │
+│  /analyze     library · waveform + speaker/speech lanes ·    │
+│               seekable transcript · insights · export        │
+│  /synthesize  voice cards · speed · result · history         │
+│  /models      hardware tier · model choice per category      │
+│  Header: language (fi / en / auto, localStorage) · status    │
 └──────────────────────────────┬───────────────────────────────┘
                                │ REST (JSON, multipart, audio/wav)
 ┌──────────────────────────────▼───────────────────────────────┐

@@ -17,7 +17,7 @@ Speechos is a local-first speech analysis and synthesis platform. It records spe
 
 ### Frontend (web/)
 - **Package manager**: pnpm
-- **Framework**: Next.js or Vite + React + TypeScript
+- **Framework**: Next.js 16 (App Router) + React 19 + TypeScript; routes /capture, /analyze, /synthesize, /models
 - **Audio**: MediaRecorder API (recording), Web Audio API (playback)
 - **Styling**: Tailwind CSS
 - **Communication**: REST + WebSocket to Python backend
