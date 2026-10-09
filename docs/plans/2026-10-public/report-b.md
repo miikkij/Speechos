@@ -7,12 +7,67 @@ torch 2.10 cu128, transformers 4.57.6. Mallien tarkat revisiot ovat tulos-JSONei
 
 | Päätös | Suositus | Perustelu (luvut) |
 |---|---|---|
-| **TTS-oletus** | **Piper-fi pysyy oletuksena** — lisää lyhyiden vuorojen suoja | Ainoa paikallinen reaaliaikainen vaihtoehto: RTF 0,036, TTFA 0,11 s. CER 4,65 % ± 1,33 (ei 3,5 % kuten kesäkuun yksittäisajo) ja hajoaa lyhyissä vuoroissa ("Joo, ymmärrän." → ~6 s höpinää joka ajossa). |
-| **Chatterbox-Finnish** | **Ei oletukseksi, ei vielä valinnaiseksi moottoriksi.** Paras paikallinen laatu, mutta liian hidas. Seuraava askel: nopeutuskokeilu; jos RTF ≤ 0,5 → valinnainen moottori. | CER 3,29 % ± 0,26 (paras paikallinen, vakain autoregressiivinen), UTMOS22 3,72 (lähimpänä pilviääniä 3,9–4,0). Automaattikriteereistä CER ✅ ja hajonta ✅, mutta RTF 1,28 ❌ (vaatimus ≤ 0,5) ja TTFA 4,6 s → moduulia `engines_fi/chatterbox_fi.py` ei tehty. |
+| **TTS-oletus** | **Piper-fi pysyy oletuksena** — lisää eteen `normalize_fi` (handoff §2b) ja lyhyiden vuorojen suoja | Ainoa paikallinen reaaliaikainen vaihtoehto: RTF 0,036, TTFA 0,11 s. CER 4,65 % ± 1,33 (ei 3,5 % kuten kesäkuun yksittäisajo) ja hajoaa lyhyissä vuoroissa ("Joo, ymmärrän." → ~6 s höpinää joka ajossa). |
+| **Chatterbox-Finnish** | **Valinnaiseksi moottoriksi (ei oletukseksi ennen kuuntelua).** Nopeutuksen jälkeen kaikki automaattikriteerit täyttyvät; moduuli `api/src/engines_fi/chatterbox_fi.py` + rekisteröintiohje `handoff-b.md` §2. | CER 3,29 % ± 0,26 (paras paikallinen, vakain autoregressiivinen), UTMOS22 3,72 (lähimpänä pilviääniä 3,9–4,0). CUDA-graph-dekooderilla RTF 1,28 → **0,43** ja TTFA 4,6 → **1,5 s** bitilleen samalla äänellä. Kriteerit: CER ✅, hajonta ✅, RTF ✅. |
 | **STT** | **Suomi-Whisper (Finnish-NLP/whisper-large-finnish-v3) suomenkielisille pyynnöille**, large-v3 pysyy yleisoletuksena. Ei vaihdeta ennen käyttäjän päätöstä. | FLEURS-fi n=300: WER 6,2 % vs 7,5 % (ero −1,3 pp, 95 % CI −2,1…−0,5), CER 1,43 vs 1,53 % (ero ei merkitsevä), sama nopeus (RTF 0,044), Apache-2.0. Konfiguraatio-ohje: `handoff-b.md` §1. |
 
 Muut: **large-v3-turbo** on 3× nopeampi (RTF 0,018, latenssi 0,21 s) +0,6 pp WER FLEURSilla, mutta selvästi heikompi
 lyhyillä klipeillä (16,3 vs 13,5 %). **Parakeet** (WER 12,6 %) ja **Qwen3-ASR** (27,3 %) eivät kilpaile suomessa.
+
+## Jatko (2026-10-09 ilta): nopeutus, moottorimoduuli, tekstinormalisointi
+
+Käyttäjä pyysi toteuttamaan suositukset. Tehty omistamiini tiedostoihin (`api/src/engines_fi/**`, `api/bench/**`):
+
+**1. Chatterbox-Finnishin nopeutus** — profiili: T3:n tokenigenerointi 84 % ajasta, 30 tok/s, ja pullonkaula oli
+Pythonin/kernel-käynnistysten yleiskustannus (~31 000 pientä `linear`-kutsua lauseessa), ei laskenta.
+
+| Kokeilu (10 lausetta, sama konfiguraatio) | T3 tok/s | RTF | Tulos |
+|---|---:|---:|---|
+| Alkuperäinen silmukka (eager kaikissa kerroksissa) | 30 | 0,99 | lähtötaso |
+| SDPA muille kuin analysaattorin kerroksille 9/12/13 | 34 | 0,92 | pieni hyöty → hylätty |
+| bf16-autocast | 29,5 | 1,05 | hitaampi → hylätty |
+| **CUDA graph + staattinen KV-välimuisti + staattinen 4D-maski** (`chatterbox_graph.py`) | **78** | **0,49** | identtiset tokenit |
+| CUDA graph + bf16-runko (Llama-painot bf16) | 129 | 0,35 | ei bitti-identtinen |
+
+Täysi ajo (38 lausetta × 3 seediä, `results/tts_fi_results_v2-graph.md`):
+
+| Variantti | CER ± sd | WER | lyhyet | katastr./ajo | RTF | TTFA | UTMOS22 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| alkuperäinen | 3,29 % ± 0,26 | 8,2 % | 4,3 % | 1,0 | 1,28 | 4,64 s | 3,72 |
+| **CUDA graph fp32** | **3,29 % ± 0,26** | 8,2 % | 4,3 % | 1,0 | **0,43** | **1,54 s** | 3,72 |
+| CUDA graph bf16 | 2,73 % ± 0,40 | 7,9 % | 2,8 % | 0,3 | 0,32 | 1,16 s | 3,71 |
+
+fp32-graafin kaikki kolme seediä tuottavat samat luvut kuin alkuperäinen, ja 10 kuunteluklippiä ovat näyte
+näytteeltä identtiset (max-ero 0,0). bf16 on nopeampi eikä huonompi, mutta ei identtinen → jätetty valinnaiseksi
+(`bf16=True`). Oletus moduulissa: graph fp32.
+
+**2. Moottorimoduuli** `api/src/engines_fi/chatterbox_fi.py`: pinnattu lataus, mallikortin latauspolku,
+lausetason `synthesize()`, 24 kHz, `set_voice()` kloonaukseen, normalisointi sisällä, ~4,4 GB VRAM. Rekisteröinti
+on A:n tiedostoissa (`models.py`, `synthesize.py`, `system.py`) → tarkka ohje `handoff-b.md` §2 (A:n
+`handoff-a.md`:n mallin mukaan). `ruff check src/engines_fi` puhdas → exclude voidaan poistaa.
+
+**3. Suomen tekstinormalisointi** `api/src/engines_fi/text_norm_fi.py` (num2words, sijamuotoheuristiikat):
+numerot, päivämäärät (essiivi), rahat, prosentit, kellonajat, puhelinnumerot (numero kerrallaan), lyhenteet,
+akronyymit, sähköpostit. 18 testiä (`bench/test_text_norm_fi.py`). Kohdennettu mittaus 10 numero-/lyhennelauseella
+(`bench/sentences_numbers_fi.txt`, 3 seediä): avainkohtien osuus (`results/tts_fi_number_items.md`,
+`bench/number_items.py`; round-trip-CER ei sovi tähän, koska oikea luenta palaa tuomarilta numeroiden ja sanojen
+sekoituksena):
+
+| Moottori | ilman normalisointia | `normalize_fi` | lauseet täysin oikein |
+|---|---:|---:|---:|
+| Chatterbox-Finnish (graph) | 40 % | **99 %** | 9/30 → **29/30** |
+| Piper fi_FI-harri-medium | 80 % | **91 %** | 16/30 → 23/30 |
+
+Chatterbox-Finnish sotkee numerot ilman normalisointia ("7.45 raiteelta 9" → "7 millä menee miisaraitelta 1");
+normalisoituna lähes kaikki menevät oikein. Piper lukee numerot osin itse (eSpeakin foneemitus), mutta hyötyy myös
+(osoite, puhelinnumero, lyhenteet). → Normalisointi kuuluu molempien eteen.
+
+**4. `main` oli edennyt** (käyttäjä mergesi B:n, A:n työ, riippuvuuspäivitys torch 2.11 / piper-tts 1.8 /
+ctranslate2 4.8 / librosa 1.0). Branch kelattiin `main`iin (fast-forward, ei uudelleenkirjoitusta), `uv lock`
+uudelleen, A:n 114 testiä + 18 normalisointitestiä menevät läpi, moottorimoduuli toimii torch 2.11:llä.
+**Huom:** illan aikana koneella pyöri muita raskaita prosesseja (CPU 60–96 %, GPU 15,7 GB varattuna, mm. toinen
+Gradio-sovellus ja päächeckoutin API), joten torch 2.11 -pinon nopeuslukuja ei mitattu luotettavasti; yllä olevat
+RTF-luvut on mitattu hiljaisella koneella torch 2.10:llä. CER-tulokset eivät riipu kuormasta.
 
 ## Mitä tehtiin
 
@@ -124,13 +179,14 @@ suomi-Whisper − turbo WER −1,89 pp [−2,75; −1,05].
 1. **Kuuntele** `E:\dev\GitHub\Speechos-b\api\bench\listen\index.html` (11 moottoria × 10 lausetta, sokkoutettu),
    lataa `ratings.json` ja aja `uv run python bench/make_listen_page.py --unblind <ratings.json>`. Erityisesti:
    kuulostaako Chatterbox-Finnish niin paljon paremmalta kuin Piper, että nopeutustyö kannattaa?
-2. **Chatterbox-Finnishin nopeutus** (yksi sessio): SDPA niille kerroksille, joita alignment-analysaattori ei
-   kuuntele, bf16/torch.compile T3:lle, lauseen striimaus S3Genillä. Tavoite RTF ≤ 0,5 / TTFA < 1 s; sitten
-   moottorimoduuli `engines_fi/chatterbox_fi.py` (lataaja on valmiina `tts_engines.py`:ssä).
+2. **Chatterbox-Finnish valinnaiseksi moottoriksi?** Nopeutus tehty (RTF 0,43, TTFA 1,5 s), moduuli valmis;
+   rekisteröinti A:n tiedostoihin `handoff-b.md` §2:n mukaan — kuka tekee ja milloin? Lisänopeutus mahdollinen:
+   bf16-runko (RTF 0,32) ja S3Genin striimaus (TTFA < 1 s).
 3. **STT**: otetaanko suomi-Whisper käyttöön suomenkielisille pyynnöille (`stt_fi`-slotti, handoff §1)?
    Ennen oletukseksi tekemistä kannattaisi ajaa puhdas lyhyiden klippien testi: Common Voice -fi MDC:stä
    (`--cv-path`) tai omat ~50 nauhoitettua keskusteluvuoroa.
 4. **Piperin lyhyiden vuorojen suoja** (A:n koodia): kesto ≫ odotettu → uusi yritys toisella `length_scale`-arvolla.
-5. **Suomen tekstinormalisointi** TTS:n eteen (numerot, lyhenteet) — hyödyttää kaikkia moottoreita.
+5. **Suomen tekstinormalisointi Piperin eteen** (A:n `synthesize_wav`): `normalize_fi(text)` ennen Piper-synteesiä
+   — moduuli valmis, ks. mittaus yllä. Chatterbox-Finnish-moduuli normalisoi jo itse.
 6. **Lisenssit**: piper-tts 1.4 on GPL-3.0; harri-ääni on hienosäädetty lessacista (Blizzard 2013 -datalisenssi).
    MMS ja CSM-FIN vain arviointiin (NC/ND).
