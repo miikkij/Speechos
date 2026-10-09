@@ -1,0 +1,30 @@
+# Isolated uv project for NVIDIA NeMo (Parakeet) — used only by bench/stt_fi.py as a subprocess worker.
+#
+# Why not an extra in api/pyproject.toml: every NeMo release conflicts with the core lock.
+#   - nemo-toolkit 2.4–2.6 pin transformers~=4.53 (core resolves 4.57.6)
+#   - nemo-toolkit 2.7.x needs setuptools>=79 (core pins setuptools<75)
+#   - nemo-toolkit 3.x pins transformers 5.x (core pins transformers<5)
+# A separate environment keeps the API lock untouched. stt_fi.py calls:
+#   uv run --project bench/nemo python bench/nemo/worker.py --clips <npz> --out <json>
+[project]
+name = "speechos-bench-nemo"
+version = "0.1.0"
+description = "NeMo ASR worker for the Speechos Finnish STT benchmark"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "nemo-toolkit[asr]==3.0.0",
+    "torch==2.10.0",
+    "numpy",
+    "soundfile",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
