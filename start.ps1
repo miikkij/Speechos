@@ -91,7 +91,7 @@ if ($Dev) {
     Write-Host "Starting API server..." -ForegroundColor Yellow
     $apiJob = Start-Job -ScriptBlock {
         Set-Location $using:PSScriptRoot\api
-        uv run python -m src.server
+        uv run python -m src
     }
 
     # Start Web

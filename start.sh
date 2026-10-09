@@ -121,7 +121,7 @@ if [ "$DEV" = true ]; then
 
     # Start API in background
     echo -e "${YELLOW}Starting API server...${NC}"
-    cd api && uv run python -m src.server &
+    cd api && uv run python -m src &
     API_PID=$!
     cd ..
 

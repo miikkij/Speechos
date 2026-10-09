@@ -1,361 +1,134 @@
 # Hardware Tier System & Model Selection
 
-> Last updated: 2026-02-27
+> Last updated: 2026-10-09. Source of truth: `TIER_CONFIGS` in `api/src/config.py`.
 
 ## Overview
 
-Speechos auto-detects available hardware (CPU cores, RAM, GPU presence, VRAM) at startup and selects the optimal model combination. Users can also override with explicit configuration via environment variables or `config.yaml`.
+At startup Speechos detects CPU cores, RAM, and (via PyTorch) CUDA GPU + VRAM, picks a
+**compute mode** and a **tier**, and loads that tier's model defaults. `config.yaml` and
+`SPEECHOS_*` environment variables override any of it.
+
+Defaults are Finnish-first: every tier synthesizes with **Piper `fi_FI-harri-medium`**
+(FI benchmark CER 3.5 %) and transcribes with multilingual **faster-whisper**
+(large-v3 FLEURS-fi WER 7.9 % on GPU tiers). A request in another language switches to
+that language's Piper voice automatically (see ARCHITECTURE.md → Languages).
 
 ---
 
-## Hardware Tiers
+## Mode and tier detection
 
-### CPU-Only Tiers
+```
+mode = SPEECHOS_COMPUTE_MODE / config.yaml compute_mode     (cpu | gpu | hybrid | auto)
+       else hybrid  if a CUDA GPU is usable and RAM >= 8 GB
+       else gpu     if a CUDA GPU is usable
+       else cpu
 
-| Tier | RAM Available | STT Model | TTS Model | Emotion Model | Diarization | VAD | Total RAM Used |
-|---|---|---|---|---|---|---|---|
-| **cpu-2gb** | ≤ 2 GB | Vosk small (40MB) | Piper (15MB) | wav2small (10M) | ❌ | Silero (2M) | ~1.5 GB |
-| **cpu-4gb** | ≤ 4 GB | Faster-Whisper tiny INT8 | Piper medium | emotion2vec+ seed | ❌ | Silero | ~3 GB |
-| **cpu-8gb** | ≤ 8 GB | Faster-Whisper base INT8 | Kokoro | emotion2vec+ base | PyAnnote | Silero | ~6 GB |
-| **cpu-16gb** | ≤ 16 GB | Faster-Whisper small INT8 | Kokoro + Piper | emotion2vec+ base | PyAnnote | Silero | ~10 GB |
-| **cpu-32gb** | ≤ 32 GB | Faster-Whisper medium INT8 | Kokoro + Orpheus (llama.cpp Q4) | emotion2vec+ large | PyAnnote | Silero | ~20 GB |
+tier = SPEECHOS_TIER / config.yaml tier  (validated against the tier list)
+       else by mode:
+         cpu:    RAM  <= 2 / 4 / 8 / 16 GB  → cpu-2gb / cpu-4gb / cpu-8gb / cpu-16gb, else cpu-32gb
+         gpu:    VRAM <= 4 / 8 / 12 / 24 GB → gpu-4gb / gpu-8gb / gpu-12gb / gpu-24gb, else gpu-32gb
+         hybrid: VRAM <= 4 / 8 / 12 / 24 GB → hybrid-4gb-gpu … hybrid-24gb-gpu, else hybrid-32gb-gpu
+```
 
-### GPU-Only Tiers
+"Usable" means `torch.cuda.is_available()`, at least one device, and the device can be
+queried; anything else (no torch, broken driver, `CUDA_VISIBLE_DEVICES=""`) is CPU.
+Forcing `SPEECHOS_COMPUTE_MODE=cpu` on a GPU machine selects a CPU tier and makes
+`/api/system/switch-model` place new models on the CPU.
 
-| Tier | VRAM Available | STT Model | TTS Model | Emotion Model | Diarization | VAD | Total VRAM Used |
-|---|---|---|---|---|---|---|---|
-| **gpu-4gb** | ≤ 4 GB | Faster-Whisper small FP16 | Kokoro | emotion2vec+ seed | ❌ | Silero | ~3.5 GB |
-| **gpu-8gb** | ≤ 8 GB | Faster-Whisper turbo FP16 | Kokoro | emotion2vec+ base | PyAnnote | Silero | ~7 GB |
-| **gpu-12gb** | ≤ 12 GB | Faster-Whisper large-v3 INT8 | Kokoro + Chatterbox | emotion2vec+ base | PyAnnote | Silero | ~10 GB |
-| **gpu-24gb** | ≤ 24 GB | Faster-Whisper large-v3 FP16 | Kokoro + Orpheus 3B FP16 | emotion2vec+ large | PyAnnote | Silero | ~22 GB |
-| **gpu-32gb** (4090 Ti) | ≤ 32 GB | Faster-Whisper large-v3 FP16 | Orpheus 3B FP16 + Kokoro + Chatterbox | emotion2vec+ large | PyAnnote | Silero | ~28 GB |
+---
 
-### CPU + GPU Combination Tiers
+## Tier matrix
 
-In hybrid mode, GPU handles inference-heavy models (STT, TTS) while CPU handles lightweight tasks (VAD, feature extraction, diarization). This allows loading more models by spreading across both.
-
-| Tier | RAM / VRAM | GPU Models | CPU Models | Total VRAM | Total RAM |
+| Tier | STT (faster-whisper) | TTS | Emotion | Diarization | VAD |
 |---|---|---|---|---|---|
-| **hybrid-4gb-gpu** | 8GB RAM / 4GB VRAM | STT: FW small FP16 | TTS: Piper, Emotion: e2v seed, VAD: Silero | ~2.5 GB | ~3 GB |
-| **hybrid-8gb-gpu** | 16GB RAM / 8GB VRAM | STT: FW turbo FP16, TTS: Kokoro | Emotion: e2v base, Diarize: PyAnnote, VAD: Silero | ~6 GB | ~4 GB |
-| **hybrid-12gb-gpu** | 16GB RAM / 12GB VRAM | STT: FW large-v3 INT8, TTS: Kokoro | Emotion: e2v base, Diarize: PyAnnote, VAD: Silero, TTS2: Piper | ~8 GB | ~4 GB |
-| **hybrid-24gb-gpu** | 32GB RAM / 24GB VRAM | STT: FW large-v3 FP16, TTS: Orpheus FP16 | Emotion: e2v large CPU, Diarize: PyAnnote, TTS2: Piper | ~20 GB | ~6 GB |
-| **hybrid-32gb-gpu** (4090 Ti) | 64GB RAM / 32GB VRAM | STT: FW large-v3 FP16, TTS: Orpheus FP16 + Kokoro GPU | Emotion: e2v large CPU, Diarize: PyAnnote, TTS3: Piper CPU | ~26 GB | ~6 GB |
+| **cpu-2gb** | tiny int8 (cpu) | Piper fi_FI-harri-medium | — | — | Silero |
+| **cpu-4gb** | tiny int8 (cpu) | Piper fi_FI-harri-medium | — | — | Silero |
+| **cpu-8gb** | base int8 (cpu) | Piper fi_FI-harri-medium | — | — | Silero |
+| **cpu-16gb** | small int8 (cpu) | Piper fi_FI-harri-medium (+ `tts_fast`) | — | — | Silero |
+| **cpu-32gb** | medium int8 (cpu) | Piper fi_FI-harri-medium | — | — | Silero |
+| **gpu-4gb** | small float16 (cuda) | Piper fi_FI-harri-medium | — | — | Silero |
+| **gpu-8gb** | turbo float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec base (cuda) | — | Silero |
+| **gpu-12gb** | large-v3 int8_float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec base (cuda) | pyannote† | Silero |
+| **gpu-24gb** | large-v3 float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec+ large (cuda) | pyannote† | Silero |
+| **gpu-32gb** | large-v3 float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec+ large (cuda) | pyannote† | Silero |
+| **hybrid-4gb-gpu** | small float16 (cuda) | Piper fi_FI-harri-medium | — | — | Silero |
+| **hybrid-8gb-gpu** | turbo float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec base (cuda) | — | Silero |
+| **hybrid-12gb-gpu** | large-v3 int8_float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec base (cuda) | pyannote† | Silero |
+| **hybrid-24gb-gpu** | large-v3 float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec+ large (cuda) | pyannote† | Silero |
+| **hybrid-32gb-gpu** | large-v3 float16 (cuda) | Piper fi_FI-harri-medium | emotion2vec+ large (cuda) | pyannote† | Silero |
+
+Piper and Silero always run on the CPU. emotion2vec models are
+`iic/emotion2vec_base_finetuned` and `iic/emotion2vec_plus_large` (FunASR).
+
+† **pyannote `pyannote/speaker-diarization-community-1`** (cuda) when `HF_TOKEN` is set
+*and* `pyannote.audio` is installed (`uv sync --extra gpu`; accept the model's terms on
+HuggingFace first). Otherwise **Resemblyzer** d-vector clustering (cuda if available).
+
+cpu-2gb used Vosk before; the bundled Vosk model is English-only, so it now uses Whisper
+tiny. Vosk remains selectable (`SPEECHOS_STT_ENGINE=vosk`).
+
+Models download on first use: Whisper → `<model_dir>/whisper`, Piper →
+`<model_dir>/piper`, Vosk → `<model_dir>/vosk`; HuggingFace models use the HF cache.
 
 ---
 
-## Your 4090 Ti Setup (32GB VRAM)
+## Overrides
 
-With a 4090 Ti, you can run **everything at maximum quality simultaneously**:
+### config.yaml
 
-```
-GPU (32 GB VRAM):
-├── STT:  Faster-Whisper large-v3 FP16              ~10 GB
-├── TTS:  Orpheus 3B FP16 (emotional, highest quality) ~8 GB
-├── TTS:  Kokoro (fast fallback, on GPU)               ~1 GB
-├── SER:  emotion2vec+ large                           ~2 GB
-├── Diarize: PyAnnote 3.1                              ~1 GB
-├── Reserved/overhead                                  ~10 GB
-└── Total: ~22 GB used, ~10 GB headroom
+Searched in this order: `SPEECHOS_CONFIG`, `./config.yaml`, `./config.yml`,
+`../config.yaml` (relative to the API's working directory). See `config.example.yaml`.
 
-CPU (system RAM):
-├── VAD:  Silero VAD                                   ~50 MB
-├── TTS:  Piper (instant CPU fallback)                 ~100 MB
-├── Features: librosa, torchaudio                      ~200 MB
-└── Total: ~350 MB
+```yaml
+compute_mode: auto          # cpu | gpu | hybrid | auto
+tier: auto                  # any tier name, or auto
+stt: {engine: faster-whisper, model: large-v3, device: cuda, compute_type: float16}
+tts: {engine: piper, model: fi_FI-harri-medium}
+emotion: {engine: none}     # "none" disables a slot
+server: {host: 0.0.0.0, port: 36300, workers: 1, cors_origins: ["http://localhost:36301"]}
+storage: {model_dir: ./models, recordings_dir: ./recordings, samples_dir: ./samples, max_upload_mb: 100}
+model_loading: lazy         # lazy | eager
 ```
 
-**Capabilities unlocked:**
-- ✅ Maximum accuracy transcription (2.7% WER)
-- ✅ Emotional TTS with tags (`<happy>`, `<sad>`, etc.)
-- ✅ Voice cloning (Chatterbox can be loaded on demand)
-- ✅ 9-class emotion recognition (multilingual)
-- ✅ Speaker diarization ("who spoke when")
-- ✅ Real-time streaming
-- ✅ All features running concurrently
+Model slots: `stt`, `tts`, `tts_fast`, `tts_expressive`, `tts_clone`, `emotion`,
+`diarization`, `vad`. A slot given in YAML replaces the tier default completely.
 
----
-
-## Auto-Detection Logic
-
-```python
-# api/src/config/hardware.py
-
-import os
-from dataclasses import dataclass
-from enum import Enum
-
-class ComputeMode(Enum):
-    CPU_ONLY = "cpu"
-    GPU_ONLY = "gpu"
-    HYBRID = "hybrid"
-
-@dataclass
-class HardwareProfile:
-    mode: ComputeMode
-    cpu_cores: int
-    ram_gb: float
-    gpu_available: bool
-    gpu_name: str | None
-    vram_gb: float
-    tier: str
-
-def detect_hardware() -> HardwareProfile:
-    """Auto-detect available hardware and determine tier."""
-    import psutil
-    
-    cpu_cores = psutil.cpu_count(logical=False)
-    ram_gb = psutil.virtual_memory().total / (1024**3)
-    
-    gpu_available = False
-    gpu_name = None
-    vram_gb = 0.0
-    
-    try:
-        import torch
-        if torch.cuda.is_available():
-            gpu_available = True
-            gpu_name = torch.cuda.get_device_name(0)
-            vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-    except ImportError:
-        pass
-    
-    # Determine mode from env or auto-detect
-    mode_override = os.environ.get("SPEECHOS_COMPUTE_MODE")
-    if mode_override:
-        mode = ComputeMode(mode_override)
-    elif gpu_available and ram_gb >= 8:
-        mode = ComputeMode.HYBRID
-    elif gpu_available:
-        mode = ComputeMode.GPU_ONLY
-    else:
-        mode = ComputeMode.CPU_ONLY
-    
-    # Determine tier
-    tier = _resolve_tier(mode, ram_gb, vram_gb)
-    
-    return HardwareProfile(
-        mode=mode,
-        cpu_cores=cpu_cores,
-        ram_gb=ram_gb,
-        gpu_available=gpu_available,
-        gpu_name=gpu_name,
-        vram_gb=vram_gb,
-        tier=tier,
-    )
-
-def _resolve_tier(mode: ComputeMode, ram_gb: float, vram_gb: float) -> str:
-    """Map hardware specs to a named tier."""
-    tier_override = os.environ.get("SPEECHOS_TIER")
-    if tier_override:
-        return tier_override
-    
-    if mode == ComputeMode.CPU_ONLY:
-        if ram_gb <= 2: return "cpu-2gb"
-        if ram_gb <= 4: return "cpu-4gb"
-        if ram_gb <= 8: return "cpu-8gb"
-        if ram_gb <= 16: return "cpu-16gb"
-        return "cpu-32gb"
-    
-    if mode == ComputeMode.GPU_ONLY:
-        if vram_gb <= 4: return "gpu-4gb"
-        if vram_gb <= 8: return "gpu-8gb"
-        if vram_gb <= 12: return "gpu-12gb"
-        if vram_gb <= 24: return "gpu-24gb"
-        return "gpu-32gb"
-    
-    # Hybrid
-    if vram_gb <= 4: return "hybrid-4gb-gpu"
-    if vram_gb <= 8: return "hybrid-8gb-gpu"
-    if vram_gb <= 12: return "hybrid-12gb-gpu"
-    if vram_gb <= 24: return "hybrid-24gb-gpu"
-    return "hybrid-32gb-gpu"
-```
-
----
-
-## Model Selection per Tier
-
-```python
-# api/src/config/tiers.py
-
-TIER_CONFIGS = {
-    # ── CPU-Only ──────────────────────────────────────────
-    "cpu-2gb": {
-        "stt": {"engine": "vosk", "model": "vosk-model-small-en-us-0.15", "device": "cpu"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "wav2small", "model": "audeering/wav2small", "device": "cpu"},
-        "diarization": None,
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "cpu-4gb": {
-        "stt": {"engine": "faster-whisper", "model": "tiny", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+seed", "device": "cpu"},
-        "diarization": None,
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "cpu-8gb": {
-        "stt": {"engine": "faster-whisper", "model": "base", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+base", "device": "cpu"},
-        "diarization": {"engine": "pyannote", "device": "cpu"},
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "cpu-16gb": {
-        "stt": {"engine": "faster-whisper", "model": "small", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cpu"},
-        "tts_fast": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+base", "device": "cpu"},
-        "diarization": {"engine": "pyannote", "device": "cpu"},
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "cpu-32gb": {
-        "stt": {"engine": "faster-whisper", "model": "medium", "device": "cpu", "compute_type": "int8"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cpu"},
-        "tts_expressive": {"engine": "orpheus", "model": "orpheus-3b-Q4_K_M", "device": "cpu", "runtime": "llama.cpp"},
-        "tts_fast": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+large", "device": "cpu"},
-        "diarization": {"engine": "pyannote", "device": "cpu"},
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-
-    # ── GPU-Only ──────────────────────────────────────────
-    "gpu-4gb": {
-        "stt": {"engine": "faster-whisper", "model": "small", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+seed", "device": "cuda"},
-        "diarization": None,
-        "vad": {"engine": "silero", "device": "cuda"},
-    },
-    "gpu-8gb": {
-        "stt": {"engine": "faster-whisper", "model": "turbo", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+base", "device": "cuda"},
-        "diarization": {"engine": "pyannote", "device": "cuda"},
-        "vad": {"engine": "silero", "device": "cuda"},
-    },
-    "gpu-12gb": {
-        "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "int8_float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "tts_clone": {"engine": "chatterbox", "model": "chatterbox-tts", "device": "cuda"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+base", "device": "cuda"},
-        "diarization": {"engine": "pyannote", "device": "cuda"},
-        "vad": {"engine": "silero", "device": "cuda"},
-    },
-    "gpu-24gb": {
-        "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "tts_expressive": {"engine": "orpheus", "model": "orpheus-3b", "device": "cuda", "compute_type": "float16"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+large", "device": "cuda"},
-        "diarization": {"engine": "pyannote", "device": "cuda"},
-        "vad": {"engine": "silero", "device": "cuda"},
-    },
-    "gpu-32gb": {
-        "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "tts_expressive": {"engine": "orpheus", "model": "orpheus-3b", "device": "cuda", "compute_type": "float16"},
-        "tts_clone": {"engine": "chatterbox", "model": "chatterbox-tts", "device": "cuda"},
-        "tts_fast": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+large", "device": "cuda"},
-        "diarization": {"engine": "pyannote", "device": "cuda"},
-        "vad": {"engine": "silero", "device": "cuda"},
-    },
-
-    # ── Hybrid (CPU + GPU) ────────────────────────────────
-    "hybrid-4gb-gpu": {
-        "stt": {"engine": "faster-whisper", "model": "small", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+seed", "device": "cpu"},
-        "diarization": None,
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "hybrid-8gb-gpu": {
-        "stt": {"engine": "faster-whisper", "model": "turbo", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+base", "device": "cpu"},
-        "diarization": {"engine": "pyannote", "device": "cpu"},
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "hybrid-12gb-gpu": {
-        "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "int8_float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "tts_fast": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+base", "device": "cpu"},
-        "diarization": {"engine": "pyannote", "device": "cpu"},
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "hybrid-24gb-gpu": {
-        "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts_expressive": {"engine": "orpheus", "model": "orpheus-3b", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "tts_fast": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+large", "device": "cpu"},
-        "diarization": {"engine": "pyannote", "device": "cpu"},
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-    "hybrid-32gb-gpu": {
-        "stt": {"engine": "faster-whisper", "model": "large-v3", "device": "cuda", "compute_type": "float16"},
-        "tts_expressive": {"engine": "orpheus", "model": "orpheus-3b", "device": "cuda", "compute_type": "float16"},
-        "tts": {"engine": "kokoro", "model": "kokoro-v0.19", "device": "cuda"},
-        "tts_clone": {"engine": "chatterbox", "model": "chatterbox-tts", "device": "cuda"},
-        "tts_fast": {"engine": "piper", "model": "en_US-lessac-medium", "device": "cpu"},
-        "emotion": {"engine": "emotion2vec", "model": "emotion2vec+large", "device": "cpu"},
-        "diarization": {"engine": "pyannote", "device": "cpu"},
-        "vad": {"engine": "silero", "device": "cpu"},
-    },
-}
-```
-
----
-
-## Environment Variable Overrides
+### Environment variables
 
 ```bash
-# Force a specific tier (skip auto-detection)
-SPEECHOS_TIER=gpu-32gb
+SPEECHOS_TIER=gpu-24gb                # force tier
+SPEECHOS_COMPUTE_MODE=cpu             # cpu | gpu | hybrid
 
-# Force compute mode
-SPEECHOS_COMPUTE_MODE=hybrid   # cpu | gpu | hybrid
-
-# Override individual models
-SPEECHOS_STT_ENGINE=faster-whisper
+# Per slot: SPEECHOS_<SLOT>_ENGINE / _MODEL / _DEVICE / _COMPUTE_TYPE
+# SLOT = STT, TTS, TTS_FAST, TTS_EXPRESSIVE, TTS_CLONE, EMOTION, DIARIZATION, VAD
 SPEECHOS_STT_MODEL=large-v3
-SPEECHOS_STT_DEVICE=cuda
-SPEECHOS_STT_COMPUTE_TYPE=float16
+SPEECHOS_STT_COMPUTE_TYPE=int8_float16
+SPEECHOS_TTS_ENGINE=kokoro            # a new engine does not inherit the old model name
+SPEECHOS_EMOTION_ENGINE=none          # disable
 
-SPEECHOS_TTS_ENGINE=kokoro
-SPEECHOS_TTS_DEVICE=cuda
-
-SPEECHOS_EMOTION_ENGINE=emotion2vec
-SPEECHOS_EMOTION_MODEL=emotion2vec+large
-
-# Model cache directory
-SPEECHOS_MODEL_DIR=/models
-
-# Server config
 SPEECHOS_HOST=0.0.0.0
 SPEECHOS_PORT=36300
-SPEECHOS_WORKERS=1
+SPEECHOS_WORKERS=1                    # keep 1 with GPU models (each worker loads its own)
+SPEECHOS_MODEL_DIR=/models
+SPEECHOS_RECORDINGS_DIR=/recordings
+SPEECHOS_CORS_ORIGINS=http://localhost:36301,http://localhost
+SPEECHOS_MODEL_LOADING=eager
+SPEECHOS_CONFIG=/path/to/config.yaml
+HF_TOKEN=hf_...                       # enables pyannote community-1 on GPU >= 12 GB tiers
 ```
+
+Env vars win over `config.yaml`, which wins over tier defaults. Runtime changes through
+`POST /api/system/switch-model` last until restart.
 
 ---
 
-## VRAM Budget Calculator
+## Memory management
 
-When running multiple models concurrently on GPU, VRAM is the bottleneck. Models are loaded/unloaded dynamically, but the system reserves VRAM budgets:
+- Models load lazily on first request (or in the background with `model_loading: eager`)
+  and stay cached until switched or unloaded (`POST /api/models/unload/{key}`).
+- Each cached model has its own lock: concurrent requests to the same model queue up,
+  different models run in parallel.
+- Docker TTS engines run one GPU container at a time (starting one stops the others).
 
-```
-Priority order (what stays loaded in VRAM):
-1. STT model     — always loaded (most used)
-2. Primary TTS   — always loaded
-3. Emotion model — loaded on demand, kept warm
-4. Diarization   — loaded on demand
-5. Voice cloning — loaded on demand (can evict #4)
-6. Expressive TTS — loaded on demand (can evict #5)
-
-Strategy: "Lazy load, LRU evict"
-- Models are loaded into VRAM on first request
-- Least-recently-used models are evicted when VRAM is tight
-- CPU fallback is always available for evicted models
-```
+Not implemented (see ARCHITECTURE.md → Roadmap): VRAM budgets and LRU eviction, pinned
+models, automatic CPU fallback when VRAM runs out.

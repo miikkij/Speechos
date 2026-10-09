@@ -31,9 +31,11 @@ tier: auto
 # tts:
 #   # Native (in-process): piper | kokoro | kitten | chatterbox | bark | espeak
 #   # Docker (WSL2 GPU):   vibevoice | qwen3-tts | xtts | chattts | melotts | orpheus | fish-speech | cosyvoice | parler
-#   engine: kokoro
-#   model: default
-#   device: cuda
+#   # Default on every tier: Piper Finnish. Requests with language=en switch to
+#   # en_US-lessac-medium automatically. Kokoro has no Finnish (returns 400 for fi).
+#   engine: piper
+#   model: fi_FI-harri-medium
+#   device: cpu
 
 # tts_expressive:
 #   engine: orpheus
@@ -41,9 +43,10 @@ tier: auto
 #   device: cuda
 #   compute_type: float16
 
+# Optional slots, used via POST /api/synthesize {"slot": "fast" | "expressive" | "clone"}
 # tts_fast:
 #   engine: piper
-#   model: en_US-lessac-medium
+#   model: fi_FI-harri-low
 #   device: cpu
 
 # Long-form / multi-speaker (podcast) synthesis — VibeVoice (Docker, GPU-only):
@@ -59,8 +62,10 @@ tier: auto
 
 # diarization:
 #   engine: pyannote            # pyannote | sortformer | speechbrain | resemblyzer
-#   model: pyannote/speaker-diarization-community-1   # 4.0, free (supersedes 3.1)
-#   device: cpu
+#   model: pyannote/speaker-diarization-community-1   # 4.0, gated: needs HF_TOKEN
+#   device: cuda
+#   # Default on GPU >= 12 GB tiers when HF_TOKEN is set and pyannote.audio is
+#   # installed (uv sync --extra gpu); Resemblyzer otherwise.
 
 # vad:
 #   engine: silero
@@ -71,9 +76,10 @@ server:
   host: 0.0.0.0
   port: 36300
   workers: 1            # Keep at 1 for GPU (shared VRAM)
-  cors_origins:
+  cors_origins:          # also SPEECHOS_CORS_ORIGINS (comma-separated)
     - "http://localhost:36301"
     - "http://localhost:80"
+    - "http://localhost"
 
 # ── Storage ───────────────────────────────────────────────
 storage:
@@ -83,17 +89,10 @@ storage:
   max_upload_mb: 100
 
 # ── Model Loading Strategy ────────────────────────────────
-# "eager": Load all models at startup (uses more memory, faster first request)
+# "eager": Preload STT, TTS and VAD in the background at startup (faster first request)
 # "lazy":  Load on first request (slower first request, lower memory baseline)
 model_loading: lazy
 
-# ── VRAM Management ───────────────────────────────────────
-vram:
-  # Maximum VRAM to use (in GB). "auto" uses 90% of available.
-  max_usage_gb: auto
-  # Eviction strategy when VRAM is full
-  eviction: lru              # lru | priority
-  # Keep these models always loaded (never evict)
-  pinned:
-    - stt
-    # - tts
+# VRAM budgets / LRU eviction are not implemented yet (see ARCHITECTURE.md → Roadmap).
+# Models stay loaded until switched (POST /api/system/switch-model) or unloaded
+# (POST /api/models/unload/{key}).
