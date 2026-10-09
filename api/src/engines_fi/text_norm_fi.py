@@ -1,4 +1,5 @@
-"""Finnish text normalization for TTS input: numbers, dates, money, units, abbreviations, acronyms, e-mail.
+"""Finnish text normalization for TTS input: numbers, dates, money, units, phone numbers, abbreviations,
+acronyms, e-mail.
 
 Local Finnish TTS engines (Piper, Chatterbox-Finnish, MMS) mostly fail on digits and abbreviations
 ("12 A", "24.", "49,90", "TTS-mallille"), see docs/plans/2026-10-public/report-b.md. This module turns
@@ -56,6 +57,10 @@ SPELLED_OVERRIDE = {"EU": "ee uu"}
 MONTHS_PARTITIVE = ("tammikuuta|helmikuuta|maaliskuuta|huhtikuuta|toukokuuta|kesäkuuta|heinäkuuta|"
                     "elokuuta|syyskuuta|lokakuuta|marraskuuta|joulukuuta")
 
+_PHONE = re.compile(r"(?<![\w+])(?:\+358 ?|0)\d{1,3}(?:[ -]?\d{2,4}){1,3}\b")
+DIGITS = ["nolla", "yksi", "kaksi", "kolme", "neljä", "viisi", "kuusi", "seitsemän", "kahdeksan", "yhdeksän"]
+# Words ending in vowel+n that are not genitive nouns ("ennen kello 16", "5 vuotta sitten").
+_NOT_GENITIVE = {"ennen", "jälkeen", "sitten", "kuin", "aikaan", "myöhemmin", "aiemmin", "aikaisemmin", "pian"}
 _EMAIL = re.compile(r"\b([\w.+-]+)@([\w-]+(?:\.[\w-]+)+)\b")
 _TIME = re.compile(r"\b(kello)\s+(\d{1,2})[.:](\d{2})\b")
 _DATE = re.compile(rf"(\S+\s+)?\b(\d{{1,2}})\.\s+({MONTHS_PARTITIVE})\b")
@@ -83,9 +88,19 @@ def _noun_case(word: str) -> str:
         return "inessive"
     if re.search(r"(lla|llä)$", word) and len(word) > 5:
         return "adessive"
-    if re.search(r"[aeiouyäö]n$", word) and len(word) > 4:  # "3 kilometrin" → "kolmen kilometrin"
+    if re.search(r"[aeiouyäö]n$", word) and len(word) > 4 and word not in _NOT_GENITIVE:  # "3 kilometrin"
         return "genitive"
     return "nominative"
+
+
+def _phone(m: re.Match) -> str:
+    """Phone numbers digit by digit, groups separated by commas: "040 123" → "nolla neljä nolla, yksi kaksi kolme"."""
+    raw, parts = m.group(0), []
+    if raw.startswith("+358"):
+        parts.append("plus kolme viisi kahdeksan")
+        raw = raw[4:]
+    parts += [" ".join(DIGITS[int(c)] for c in g) for g in re.split(r"[ -]+", raw.strip()) if g]
+    return ", ".join(parts)
 
 
 def _email(m: re.Match) -> str:
@@ -126,6 +141,7 @@ def _acronym(m: re.Match) -> str:
 def normalize_fi(text: str) -> str:
     """Return `text` with numbers, money, dates, abbreviations, acronyms and e-mails spelled out."""
     text = _EMAIL.sub(_email, text)
+    text = _PHONE.sub(_phone, text)
     for abbr, full in ABBREVIATIONS.items():
         # a sentence-final abbreviation keeps the full stop it was carrying ("… jne." → "… edelleen.")
         text = re.sub(rf"(?<![\w.]){re.escape(abbr)}(?=\s|$)",

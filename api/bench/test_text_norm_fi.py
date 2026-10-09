@@ -22,6 +22,10 @@ from src.engines_fi.text_norm_fi import normalize_fi  # noqa: E402
     ("Asun 3 kilometrin päässä.", "Asun kolmen kilometrin päässä."),
     ("Omenoita, päärynöitä jne.", "Omenoita, päärynöitä ja niin edelleen."),
     ("Luku on 3,05.", "Luku on kolme pilkku nolla viisi."),
+    ("Soita numeroon 040 123 4567 ennen klo 16.",
+     "Soita numeroon nolla neljä nolla, yksi kaksi kolme, neljä viisi kuusi seitsemän ennen kello kuusitoista."),
+    ("Numero on +358 40 1234567.", "Numero on plus kolme viisi kahdeksan, neljä nolla, yksi kaksi kolme neljä viisi kuusi seitsemän."),
+    ("Se tapahtui 5 vuotta sitten.", "Se tapahtui viisi vuotta sitten."),
     ("Asuin 1990-luvulla 2 vuotta Turussa.", "Asuin tuhat yhdeksänsataayhdeksänkymmentä-luvulla kaksi vuotta Turussa."),
 ])
 def test_normalize_fi(raw: str, expected: str) -> None:
