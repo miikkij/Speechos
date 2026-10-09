@@ -472,6 +472,9 @@ def render(json_path: Path) -> None:
 
 
 def main() -> None:
+    # Windows consoles default to cp1252; help text and progress lines contain non-ASCII (≥, →, ä)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Finnish STT WER/CER/RTF benchmark")
     ap.add_argument("--models", nargs="+", default=["large-v3"],
                     help=f"keys {list(MODELS)} or any faster-whisper alias/repo/path")

@@ -253,6 +253,9 @@ def markdown_table(results: list[dict], scorer_names: list[str]) -> str:
 
 
 def main() -> None:
+    # Windows consoles default to cp1252; help text and progress lines contain non-ASCII (≥, →, ä)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Finnish TTS round-trip + stability benchmark")
     ap.add_argument("--engines", nargs="+", default=["piper-fi", "espeak-fi"], choices=ENGINE_KEYS)
     ap.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2], help="one full run per seed (≥3)")
