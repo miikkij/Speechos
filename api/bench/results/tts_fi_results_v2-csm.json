@@ -1,0 +1,214 @@
+{
+ "params": {
+  "engines": [
+   "csm-fin"
+  ],
+  "seeds": [
+   0
+  ],
+  "n_sentences": 10,
+  "n_short": 2,
+  "judge": "Systran/faster-whisper-large-v3@edaa852ec7e145841d8ffdb056a99866b5f0a478",
+  "judge_beam": 5,
+  "judge_vad_filter": true,
+  "ref_wav": "reference_finnish.wav",
+  "device": "cuda",
+  "utmos": {
+   "utmos22": "tarepan/SpeechMOS:v1.2.0",
+   "utmosv2": "sarulab-speech/UTMOSv2@cc2700db57bb83ee13dc31ebe1b868c254e15d09"
+  },
+  "catastrophic_cer": 0.3,
+  "date": "2026-10-09"
+ },
+ "sentences": [
+  "Hei, miten voit tänään?",
+  "Ymmärrän, että tilanne tuntuu raskaalta.",
+  "Kuulostaa siltä, että olet ollut todella väsynyt viime aikoina.",
+  "Olet tehnyt parhaasi, ja se on tärkeää.",
+  "Äidin yövalvojaiset äityivät pitkiksi.",
+  "Tapaaminen on sovittu tiistaina 24. maaliskuuta.",
+  "Maksu oli yhteensä 49,90 euroa.",
+  "Mietitäänkö yhdessä, mitä voisit tehdä huomenna?",
+  "Joo, ymmärrän.",
+  "Miltä se tuntui?"
+ ],
+ "results": [
+  {
+   "engine": "csm-fin",
+   "info": {
+    "key": "csm-fin",
+    "license": "weights Apache-2.0, data Nord-Parl-TTS CC-BY-NC-ND-4.0 (evaluation only)",
+    "revision": "ArttuPakarinen/sesame-csm-FIN-parlament-full-finetune@f297d601e7cb05ce621206e1b18e3260ef206e6e",
+    "local": true,
+    "device": "cuda",
+    "notes": "",
+    "params": {
+     "temperature": 0.8,
+     "top_p": 0.95,
+     "max_new_tokens": 600
+    }
+   },
+   "load_s": 7.0,
+   "peak_vram_gb": 5.04,
+   "runs": [
+    {
+     "seed": 0,
+     "n": 10,
+     "failures": 0,
+     "cer": 0.5568513119533528,
+     "wer": 0.6538461538461539,
+     "cer_short": 2.814814814814815,
+     "catastrophic": 5,
+     "rtf": 4.4464174529632725,
+     "ttfa_median_s": 44.66401194996433,
+     "ttfa_short_median_s": 43.67951984994579,
+     "audio_s": 99.92,
+     "utmos22_mean": 2.5185739994049072,
+     "utmosv2_mean": 2.45390625
+    }
+   ],
+   "agg": {
+    "cer": 0.5568513119533528,
+    "cer_sd": 0.0,
+    "wer": 0.6538461538461539,
+    "wer_sd": 0.0,
+    "cer_short": 2.814814814814815,
+    "cer_short_sd": 0.0,
+    "catastrophic": 5,
+    "catastrophic_sd": 0.0,
+    "rtf": 4.4464174529632725,
+    "rtf_sd": 0.0,
+    "ttfa_median_s": 44.66401194996433,
+    "ttfa_median_s_sd": 0.0,
+    "ttfa_short_median_s": 43.67951984994579,
+    "ttfa_short_median_s_sd": 0.0,
+    "utmos22_mean": 2.5185739994049072,
+    "utmos22_mean_sd": 0.0,
+    "utmosv2_mean": 2.45390625,
+    "utmosv2_mean_sd": 0.0
+   },
+   "details": [
+    {
+     "seed": 0,
+     "i": 0,
+     "ref": "hei miten voit tänään",
+     "hyp": "hei miten voit tänään",
+     "cer": 0.0,
+     "dur_s": 8.08,
+     "synth_s": 27.94,
+     "ttfa_s": 27.935,
+     "utmos22": 2.287,
+     "utmosv2": 1.235
+    },
+    {
+     "seed": 0,
+     "i": 1,
+     "ref": "ymmärrän että tilanne tuntuu raskaalta",
+     "hyp": "ymmärrän että tilanne tuntuu raskalta se on yksi soffi",
+     "cer": 0.4737,
+     "dur_s": 11.6,
+     "synth_s": 61.509,
+     "ttfa_s": 61.506,
+     "utmos22": 2.62,
+     "utmosv2": 2.797
+    },
+    {
+     "seed": 0,
+     "i": 2,
+     "ref": "kuulostaa siltä että olet ollut todella väsynyt viime aikoina",
+     "hyp": "kuulostaa siltä että olet ollut todella väsynyt viime aikoina",
+     "cer": 0.0,
+     "dur_s": 7.52,
+     "synth_s": 28.058,
+     "ttfa_s": 28.056,
+     "utmos22": 2.52,
+     "utmosv2": 2.17
+    },
+    {
+     "seed": 0,
+     "i": 3,
+     "ref": "olet tehnyt parhaasi ja se on tärkeää",
+     "hyp": "olet niin nyt parhaasi ja se on tärkeää",
+     "cer": 0.1351,
+     "dur_s": 8.32,
+     "synth_s": 44.306,
+     "ttfa_s": 44.303,
+     "utmos22": 2.32,
+     "utmosv2": 3.213
+    },
+    {
+     "seed": 0,
+     "i": 4,
+     "ref": "äidin yövalvojaiset äityivät pitkiksi",
+     "hyp": "havapiirin yövalvojaiset äityivät pitkiksi",
+     "cer": 0.1892,
+     "dur_s": 8.48,
+     "synth_s": 47.701,
+     "ttfa_s": 47.699,
+     "utmos22": 2.755,
+     "utmosv2": 2.877
+    },
+    {
+     "seed": 0,
+     "i": 5,
+     "ref": "tapaaminen on sovittu tiistaina 24 maaliskuuta",
+     "hyp": "tapaaminen on sovittu tiistaina 24 maaliskuuta",
+     "cer": 0.0,
+     "dur_s": 6.16,
+     "synth_s": 21.446,
+     "ttfa_s": 21.445,
+     "utmos22": 2.793,
+     "utmosv2": 2.885
+    },
+    {
+     "seed": 0,
+     "i": 6,
+     "ref": "maksu oli yhteensä 49 90 euroa",
+     "hyp": "maksu oli yhteensä otte näin niin näin näyttää neto euroa varaa tämä tarvittainen tarjoaa",
+     "cer": 2.1,
+     "dur_s": 15.2,
+     "synth_s": 58.5,
+     "ttfa_s": 58.499,
+     "utmos22": 2.595,
+     "utmosv2": 2.26
+    },
+    {
+     "seed": 0,
+     "i": 7,
+     "ref": "mietitäänkö yhdessä mitä voisit tehdä huomenna",
+     "hyp": "mietitäänkö yhdessä mitä voisit tehdä huomenna mitä voisit kehitystä",
+     "cer": 0.4783,
+     "dur_s": 14.4,
+     "synth_s": 67.462,
+     "ttfa_s": 67.461,
+     "utmos22": 2.516,
+     "utmosv2": 3.002
+    },
+    {
+     "seed": 0,
+     "i": 8,
+     "ref": "joo ymmärrän",
+     "hyp": "eilen jo ymmärrän kuinka ääntä kohtaan täältä on kertoisia",
+     "cer": 4.0,
+     "dur_s": 9.28,
+     "synth_s": 42.336,
+     "ttfa_s": 42.334,
+     "utmos22": 2.428,
+     "utmosv2": 1.603
+    },
+    {
+     "seed": 0,
+     "i": 9,
+     "ref": "miltä se tuntui",
+     "hyp": "miltä se tuntui kun tuntui että minä olisin",
+     "cer": 1.8667,
+     "dur_s": 10.88,
+     "synth_s": 45.027,
+     "ttfa_s": 45.025,
+     "utmos22": 2.353,
+     "utmosv2": 2.498
+    }
+   ]
+  }
+ ]
+}

@@ -182,7 +182,7 @@ UTMOS22-strong / UTMOSv2 are English/Japanese-trained naturalness predictors —
 | Chatterbox-Finnish cp986, default (English) voice | 5.34 % ± 1.33 | 13.6 % | 9.5 % | 2.0 | 1.01 | 2.3 s | 3.71 | MIT |
 | eSpeak-NG 1.52 | 9.94 % ± 0.00 | 31.4 % | 3.7 % | 3.0 | 0.02 | 0.04 s | 1.77 | GPL-3.0 |
 | Chatterbox Multilingual, default voice | 16.89 % ± 8.74 | 23.5 % | 59.9 % | 4.3 | 1.09 | 5.4 s | 3.06 | MIT |
-| CSM-1B FIN parliament fine-tune | see `tts_fi_results_v2-csm.md` (paraphrases/babbles, RTF ≈ 4) | | | | | | | weights Apache-2.0, data CC-BY-NC-ND |
+| CSM-1B FIN parliament fine-tune (1 run, 10 sentences) | 55.7 % | 65.4 % | 281 % | 5/10 | 4.45 | 44.7 s | 2.52 | weights Apache-2.0, data CC-BY-NC-ND |
 | ZipVoice-Suomi-12k | not run — needs k2 (no Windows build) | | | | | | | CC-BY-ND-4.0 |
 
 **Findings.**
@@ -191,7 +191,8 @@ UTMOS22-strong / UTMOSv2 are English/Japanese-trained naturalness predictors —
   It needs a Finnish reference voice: with the built-in (English) voice CER rises to 5.3 % ± 1.3.
   Its remaining errors are mostly digits ("12 A", "24."), not babble. **But it is slower than real time on
   an RTX 4090 (RTF ≈ 1.3, ~4.6 s to first audio)** with the card configuration (eager attention, CFG,
-  alignment analyzer) — unusable for live dialogue without streaming/optimisation.
+  alignment analyzer) — unusable for live dialogue without streaming/optimisation. Profile: T3 token
+  generation is 84 % of the time (30.9 tokens/s; 25 tokens = 1 s audio), S3Gen 16 %, watermark 1 %.
 - **Piper-fi is not as stable as the single June run suggested** (3.5 %): CER 3.2–5.9 % across runs, and
   it fails on very short turns — "Joo, ymmärrän." comes out as ~6 s of babble in every run.
 - The base Chatterbox Multilingual default voice remains unusable for Finnish (catastrophic in 4.3
